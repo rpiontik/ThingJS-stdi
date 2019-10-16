@@ -3,7 +3,7 @@
  *      Author: rpiontik
  */
 
-#include "1wire.h"
+#include "tgsi_1wire.h"
 
 #include "sdti_utils.h"
 

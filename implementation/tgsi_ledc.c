@@ -3,7 +3,7 @@
  *      Author: rpiontik
  */
 
-#include "hwi_ledc.h"
+#include "tgsi_ledc.h"
 
 #include "cJSON.h"
 #include "mjs.h"
