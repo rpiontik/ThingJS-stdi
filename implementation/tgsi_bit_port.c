@@ -88,11 +88,12 @@ mjs_val_t thingjsBitPortConstructor(struct mjs *mjs, cJSON *params) {
 
 void thingjsBitPortRegister(void) {
     static int thingjs_bit_port_cases[] = DEF_CASES(
-            DEF_CASE(GPIO2), DEF_CASE(GPIO3), DEF_CASE(GPIO4), DEF_CASE(GPIO5),
-            DEF_CASE(GPIO12), DEF_CASE(GPIO13), DEF_CASE(GPIO14), DEF_CASE(GPIO15),
-            DEF_CASE(GPIO16), DEF_CASE(GPIO17), DEF_CASE(GPIO18), DEF_CASE(GPIO19),
-            DEF_CASE(GPIO21), DEF_CASE(GPIO22), DEF_CASE(GPIO23), DEF_CASE(GPIO25),
-            DEF_CASE(GPIO26), DEF_CASE(GPIO27), DEF_CASE(GPIO32), DEF_CASE(GPIO33)
+            DEF_CASE(GPIO0),  DEF_CASE(GPIO2), DEF_CASE(GPIO3), DEF_CASE(GPIO4),
+            DEF_CASE(GPIO5),  DEF_CASE(GPIO12), DEF_CASE(GPIO13), DEF_CASE(GPIO14),
+            DEF_CASE(GPIO15), DEF_CASE(GPIO16), DEF_CASE(GPIO17), DEF_CASE(GPIO18),
+            DEF_CASE(GPIO19), DEF_CASE(GPIO21), DEF_CASE(GPIO22), DEF_CASE(GPIO23),
+            DEF_CASE(GPIO25), DEF_CASE(GPIO26), DEF_CASE(GPIO27), DEF_CASE(GPIO32),
+            DEF_CASE(GPIO33)
     );
 
     static const struct st_thingjs_interface_manifest interface = {
