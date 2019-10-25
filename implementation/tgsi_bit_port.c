@@ -13,7 +13,15 @@
 
 const char TAG_BIT_PORT[] = "BIT_PORT";
 
-//Interface function set
+//
+inline gpio_num_t getGPIO(struct mjs *mjs) {
+    //Get this object that store params
+    mjs_val_t this_obj = mjs_get_this(mjs);
+    //Get internal params
+    return (gpio_num_t) mjs_get_int32(mjs, mjs_get(mjs, this_obj, "gpio", ~0));
+}
+
+//Interface function direction
 static void thingjsBitPortSet(struct mjs *mjs) {
     //Get function params
     mjs_val_t arg0 = mjs_arg(mjs, 0);
@@ -30,24 +38,31 @@ static void thingjsBitPortSet(struct mjs *mjs) {
         return;
     }
 
-    //Get this object that store params
-    mjs_val_t this_obj = mjs_get_this(mjs);
-    //Get internal params
-    gpio_num_t gpio = mjs_get_int32(mjs, mjs_get(mjs, this_obj, "gpio", ~0));
+    gpio_set_level(getGPIO(mjs), level ? 1 : 0);
 
-    gpio_set_level(gpio, level ? 1 : 0);
+    mjs_return(mjs, MJS_UNDEFINED);
+}
 
-    mjs_return(mjs, mjs_mk_boolean(mjs, gpio_get_level(gpio)));
+
+//Interface function set
+static void thingjsBitPortDirection(struct mjs *mjs) {
+    //Get function params
+    mjs_val_t arg0 = mjs_arg(mjs, 0);
+    //Param validation
+    if (mjs_is_number(arg0)) {
+        /* Set the GPIO as a push/pull output */
+        gpio_set_direction(getGPIO(mjs), (gpio_mode_t) mjs_get_int32(mjs, arg0));
+    } else {
+        mjs_set_errorf(mjs, MJS_INTERNAL_ERROR, "%s: Incorrect call function direction(mode)", TAG_BIT_PORT);
+        mjs_return(mjs, MJS_INTERNAL_ERROR);
+        return;
+    }
+    mjs_return(mjs, MJS_UNDEFINED);
 }
 
 //Interface function get
 static void thingjsBitPortGet(struct mjs *mjs) {
-    //Get this object that store params
-    mjs_val_t this_obj = mjs_get_this(mjs);
-    //Get internal params
-    gpio_num_t gpio = mjs_get_int32(mjs, mjs_get(mjs, this_obj, "gpio", ~0));
-    //Return current level
-    mjs_return(mjs, mjs_mk_boolean(mjs, gpio_get_level(gpio)));
+    mjs_return(mjs, mjs_mk_boolean(mjs, gpio_get_level(getGPIO(mjs)) != 0));
 }
 
 mjs_val_t thingjsBitPortConstructor(struct mjs *mjs, cJSON *params) {
@@ -81,6 +96,15 @@ mjs_val_t thingjsBitPortConstructor(struct mjs *mjs, cJSON *params) {
             mjs_mk_foreign_func(mjs, (mjs_func_ptr_t) thingjsBitPortSet));
     mjs_set(mjs, interface, "get", ~0,
             mjs_mk_foreign_func(mjs, (mjs_func_ptr_t) thingjsBitPortGet));
+    mjs_set(mjs, interface, "direction", ~0,
+            mjs_mk_foreign_func(mjs, (mjs_func_ptr_t) thingjsBitPortDirection));
+
+    //Consts
+    mjs_set(mjs, interface, "DIR_MODE_DISABLE", ~0, mjs_mk_number(mjs, GPIO_MODE_DISABLE));
+    mjs_set(mjs, interface, "DIR_MODE_DEF_INPUT", ~0, mjs_mk_number(mjs, GPIO_MODE_DEF_INPUT));
+    mjs_set(mjs, interface, "DIR_MODE_DEF_OUTPUT", ~0, mjs_mk_number(mjs, GPIO_MODE_DEF_OUTPUT));
+    mjs_set(mjs, interface, "DIR_MODE_INPUT_OUTPUT_OD", ~0, mjs_mk_number(mjs, GPIO_MODE_INPUT_OUTPUT_OD));
+    mjs_set(mjs, interface, "DIR_MODE_INPUT_OUTPUT", ~0, mjs_mk_number(mjs, GPIO_MODE_INPUT_OUTPUT));
 
     //Return mJS interface object
     return interface;
