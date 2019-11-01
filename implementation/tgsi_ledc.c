@@ -18,17 +18,34 @@
 #include "thingjs_board.h"
 #include "thingjs_core.h"
 
+typedef struct ledcConfigChannel_s {
+    int GPIO_Number;
+    uint32_t Duty;
+    bool Inverce;
+} ledcConfigChannel_t;
+
+typedef struct ledcConfig_s {
+    uint32_t ledcTimersResolution;
+    uint32_t ledcTimersFrequency;
+    ledcConfigChannel_t channels[16];
+} ledcConfig_t;
+
+static ledcConfig_t* ledcConfig;
+
 mjs_val_t thingjsLEDCConstructor(struct mjs * mjs, cJSON * params);
 
 void thingjsLEDCRegister(void) {
     //Declare available pin cases for interface
     static int thingjs_ledc_cases[] = DEF_CASES(
-            DEF_CASE(GPIO2),	DEF_CASE(GPIO3),	DEF_CASE(GPIO4),	DEF_CASE(GPIO5),
+            DEF_CASE(GPIO2),	DEF_CASE(GPIO4),	DEF_CASE(GPIO5),
             DEF_CASE(GPIO12),	DEF_CASE(GPIO13),	DEF_CASE(GPIO14),	DEF_CASE(GPIO15),
             DEF_CASE(GPIO16),	DEF_CASE(GPIO17),	DEF_CASE(GPIO18),	DEF_CASE(GPIO19),
             DEF_CASE(GPIO21),	DEF_CASE(GPIO22),	DEF_CASE(GPIO23),	DEF_CASE(GPIO25),
-            DEF_CASE(GPIO26),	DEF_CASE(GPIO27),	DEF_CASE(GPIO32),	DEF_CASE(GPIO33)
+            DEF_CASE(GPIO26),	DEF_CASE(GPIO27),	DEF_CASE(GPIO32),	DEF_CASE(GPIO33),
+            DEF_CASE(GPIO34),	DEF_CASE(GPIO35),	DEF_CASE(GPIO36),	DEF_CASE(GPIO39)
     );
+
+    // GPIO1, GPIO3 Used for TX/RX of UART programmer
 
     //Declare interface's manifest
     static const struct st_thingjs_interface_manifest interface = {
@@ -53,9 +70,6 @@ static st_bind_channel ledc_binded_channels[LEDC_NUMBER_CHANNELS] = {0};
 
 //Flag of started LEDC
 static bool ledc_inited = false;
-
-static uint32_t ledc_timers_resolution = 15;
-static uint32_t ledc_timers_frequency = 2440;
 
 /*
 typedef struct {
@@ -118,7 +132,7 @@ static esp_err_t ledc_timer_reconfig(uint32_t freq, ledc_timer_bit_t resolution)
         .duty_resolution = resolution, 			// resolution of PWM duty
         .freq_hz = freq,                    	// frequency of PWM signal
         .speed_mode = LEDC_HIGH_SPEED_MODE, 	// timer mode
-        .timer_num = LEDC_TIMER_0            	// timer index
+        .timer_num = LEDC_TIMER_0,            	// timer index
     };
 
     // Set configuration of timer0 for high speed channels
@@ -138,8 +152,8 @@ static esp_err_t ledc_timer_reconfig(uint32_t freq, ledc_timer_bit_t resolution)
     	return result;
     }
 
-    ledc_timers_resolution = resolution;
-    ledc_timers_frequency  = ledc_get_freq(LEDC_HIGH_SPEED_MODE, LEDC_TIMER_0);
+    ledcConfig->ledcTimersResolution = resolution;
+    ledcConfig->ledcTimersFrequency  = ledc_get_freq(LEDC_HIGH_SPEED_MODE, LEDC_TIMER_0);
 
     ESP_LOGD(TAG_LEDC, "Timers configured res:%u freq:%u", resolution, freq);
 
@@ -148,11 +162,29 @@ static esp_err_t ledc_timer_reconfig(uint32_t freq, ledc_timer_bit_t resolution)
 
 
 //Detect using ledc
-static void ledc_touch(void){
+static int ledc_touch(void){
 	if(!ledc_inited) {
-		ledc_timer_reconfig(ledc_timers_frequency, ledc_timers_resolution);
-		//xTaskCreatePinnedToCore(ledc_control_task, "LedController", 2000, NULL, 5, NULL, 0);
+
+	    ledcConfig = malloc(sizeof(ledcConfig_t));
+
+        if (ledcConfig == NULL) {
+            ESP_LOGE(TAG_LEDC, "Could not allocate memory for LEDC Config");
+            return ESP_ERR_NO_MEM;
+        }
+
+        memset(ledcConfig, 0, sizeof(ledcConfig_t));
+
+        ledcConfig->ledcTimersFrequency  = LEDC_CONFIG_DEFAULT_FREQUENCY;
+        ledcConfig->ledcTimersResolution = LEDC_CONFIG_DEFAULT_RESOLUTION;
+
+        //uint32_t i;
+        for ( uint32_t i=0; i < LEDC_NUMBER_CHANNELS; i++) ledcConfig->channels[i].GPIO_Number = -1;
+
+		ledc_timer_reconfig(ledcConfig->ledcTimersFrequency, ledcConfig->ledcTimersResolution);
+
+        ledc_inited = 1;
 	}
+	return 0;
 }
 
 
@@ -183,10 +215,17 @@ static esp_err_t hwi_bind_ledc_channel_to_GPIO(uint32_t channel, int gpioNum, bo
 	} else
 		return ESP_ERR_INVALID_ARG;
 
-	ledc_channel.duty = inverce ? (1 << ledc_timers_resolution) - 1 : 0;
+	ledc_channel.duty = inverce ? (1 << ledcConfig->ledcTimersResolution) - 1 : 0;
 	ledc_channel.gpio_num   = gpioNum;
 
 	esp_err_t result = ledc_channel_config(&ledc_channel);
+
+	if(ESP_OK == result)
+    {
+	    ledcConfig->channels[channel].GPIO_Number = ledc_channel.gpio_num;
+        ledcConfig->channels[channel].Duty        = ledc_channel.duty;
+        ledcConfig->channels[channel].Inverce     = inverce;
+    }
 
 	return result;
 }
@@ -229,14 +268,37 @@ static void hwi_vm_func_setDutyToChannelWithFade(struct mjs *mjs) {
 		mjs_val_t params = mjs_get(mjs, this_obj, "gpio", ~0);
 		//Validate internal params
 		if(mjs_is_number(arg0)) {
-			//Convert internal params
-			uint32_t channel = mjs_get_int32(mjs, params);
-			//Convert function params
-			uint32_t duty = mjs_get_int32(mjs, arg0);
-			uint32_t fade_ms = mjs_get_int32(mjs, arg1);
+            //Convert internal params
+            uint32_t channel = mjs_get_int32(mjs, params);
+            //Convert function params
+            uint32_t duty = mjs_get_int32(mjs, arg0);
+            uint32_t fade_ms = mjs_get_int32(mjs, arg1);
+
+            uint32_t speedMode = LEDC_HIGH_SPEED_MODE;
+            uint32_t ch = channel;
+
+            if (channel < 8)
+                speedMode = LEDC_HIGH_SPEED_MODE;
+            else if (channel < 16) {
+                ch = channel - 8;
+                speedMode = LEDC_LOW_SPEED_MODE;
+            } else {
+                mjs_set_errorf(mjs, MJS_INTERNAL_ERROR, "%s: Incorrect internal param channel", TAG_LEDC);
+                res = MJS_INTERNAL_ERROR;
+            }
+
+            uint32_t dutyToSet = duty;
+            if( ledcConfig->channels[channel].Inverce )  dutyToSet = ( 1 << ledcConfig->ledcTimersResolution ) - duty - 1;
+
+            dutyToSet &= 0xFFFF;
 
 			ESP_LOGD(TAG_LEDC, "setDutyToChannelWithFade(%d, %d, %d)", channel, duty, fade_ms);
-			res = MJS_OK;
+
+            esp_err_t result = ledc_set_fade_time_and_start(speedMode,ch,dutyToSet,fade_ms,LEDC_FADE_NO_WAIT);
+
+            if (ESP_OK != result) res = MJS_INTERNAL_ERROR;
+            else res = MJS_OK;
+
 		} else {
 			mjs_set_errorf(mjs, MJS_INTERNAL_ERROR, "%s: Incorrect internal params", TAG_LEDC);
 			res = MJS_INTERNAL_ERROR;
@@ -253,30 +315,38 @@ mjs_val_t thingjsLEDCConstructor(struct mjs * mjs, cJSON * params) {
 	//Validate preset params
 	if(!cJSON_IsNumber(params))
 		return MJS_UNDEFINED;
+
 	//Call LEDC configurator
-	ledc_touch();
+	if( 0!=ledc_touch()) return MJS_UNDEFINED;
+
 	//Create mJS interface object
 	mjs_val_t interface = mjs_mk_object(mjs);
+
 	//Try to bind channel number
 	int channel = hwi_bind_channel(mjs, interface);
 	if(channel < 0) {
 		ESP_LOGE(TAG_LEDC, "Can not bind channel %d", channel);
 		return MJS_UNDEFINED;
 	}
+
 	//Add protected property to interface
 	mjs_set(mjs, interface, "channel", ~0, mjs_mk_number(mjs, channel));
 	mjs_set(mjs, interface, "gpio", ~0, mjs_mk_number(mjs, params->valueint));
-	mjs_set(mjs, interface, "duty", ~0, mjs_mk_number(mjs, (1 << ledc_timers_resolution) - 1));
+	mjs_set(mjs, interface, "duty", ~0, mjs_mk_number(mjs, (1 << ledcConfig->ledcTimersResolution) - 1));
 	mjs_set(mjs, interface, "inverce", ~0, mjs_mk_boolean(mjs, 1));
+
 	//Set protected flag
 	mjs_set_protected(mjs, interface, "channel", ~0, true);
 	mjs_set_protected(mjs, interface, "gpio", ~0, true);
 	mjs_set_protected(mjs, interface, "duty", ~0, true);
 	mjs_set_protected(mjs, interface, "inverce", ~0, true);
+
 	//Bind functions
 	mjs_set(mjs, interface, "setDutyToChannelWithFade", ~0, mjs_mk_foreign_func(mjs, (mjs_func_ptr_t) hwi_vm_func_setDutyToChannelWithFade));
+
 	//Bind in LED controller
 	hwi_bind_ledc_interface(mjs, interface);
+
 	//Return mJS interface object
 	return interface;
 }
