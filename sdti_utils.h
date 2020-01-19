@@ -16,7 +16,7 @@
 #define DEF_ENUM(...) ENUM, __VA_ARGS__, NON
 
 
-void stdi_setProtectedProperty(struct mjs *mjs, mjs_val_t interface, const char *name, mjs_val_t val);
+mjs_err_t  stdi_setProtectedProperty(struct mjs *mjs, mjs_val_t interface, const char *name, mjs_val_t val);
 
 
 #endif /* STDI_UTILS_H_ */

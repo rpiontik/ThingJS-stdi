@@ -2,6 +2,8 @@
 // Created by rpiontik on 19.01.20.
 //
 
+#include "tgsi_timer.h"
+
 #include "freertos/FreeRTOSConfig.h"
 #include "freertos/FreeRTOS.h"
 #include <freertos/timers.h>
@@ -13,11 +15,14 @@
 #include "thingjs_board.h"
 #include "thingjs_core.h"
 
-const char INTERFACE_NAME[] = "timer";
+#define  INTERFACE_NAME "timer"
+
+const char TAG_TIMER[] = INTERFACE_NAME;
 
 struct timer_params {
     TimerHandle_t timer;    //Handle of timer
-    struct mjs *mjs;        //mJS process
+    TaskHandle_t process;   //Context owner
+    struct mjs *context;    //mJS object
     bool is_interval;       //Is interval timer
     mjs_val_t callback;     //mJS callback function
     mjs_val_t params;       //mJS callback params
@@ -26,16 +31,11 @@ struct timer_params {
 void vm_timer_callback(TimerHandle_t xTimer) {
     struct timer_params *params = (struct timer_params *) pvTimerGetTimerID(xTimer);
 
-    struct ubus_message ubm = {
-            .type = ubus_timer
-    };
+    thingjsSyncCallMJSFunction(params->process, params->context, params->callback, params->params);
 
-    memcpy(&ubm.data, params, sizeof(struct vm_timer_params));
-    xQueueSend(params->process->input, &ubm, 1000);
-
-    if (!params->interval) {
+    if (!params->is_interval) {
+        free(params);
         xTimerDelete(xTimer, 0);
-        params->timer = 0;
     }
 }
 
@@ -50,10 +50,10 @@ static void thingjsRunTimer(struct mjs *mjs, bool is_interval) {
     if (mjs_is_function(arg0) && mjs_is_number(arg1) && mjs_get_int32(mjs, arg1) > 0) {
         char timer_name[256];
         uint32_t interval = mjs_get_int32(mjs, arg1);
-        snprintf(timer_name, sizeof(timer_name) - 1, "%s/%s/%d", app_name, INTERFACE_NAME, 0); //todo - need to ID of timer
+        snprintf(timer_name, sizeof(timer_name) - 1, "%s/%s/%d", app_name, TAG_TIMER, 0); //todo - need to ID of timer
 
         struct timer_params * params = malloc(sizeof(struct timer_params));
-        params->mjs = mjs;
+        params->context = mjs;
         params->is_interval = is_interval;
         params->callback = arg0;
         params->params = arg3;
@@ -61,9 +61,15 @@ static void thingjsRunTimer(struct mjs *mjs, bool is_interval) {
         TimerHandle_t timer_handle = xTimerCreate(timer_name, interval, is_interval ?  pdTRUE : pdFALSE,
                 params, vm_timer_callback);
 
-        mjs_return(mjs, mjs_mk_foreign(mjs, timer_handle));
+        if (xTimerStart(timer_handle, 0) != pdPASS) {
+            xTimerDelete(timer_handle, 0);
+            mjs_set_errorf(mjs, MJS_INTERNAL_ERROR, "Error of starting timer");
+            mjs_return(mjs, MJS_INTERNAL_ERROR);
+        } else {
+            mjs_return(mjs, mjs_mk_foreign(mjs, timer_handle));
+        }
     } else {
-        mjs_set_errorf(mjs, MJS_INTERNAL_ERROR, "%s/%s: Incorrect params of function setTimeout", app_name, INTERFACE_NAME);
+        mjs_set_errorf(mjs, MJS_INTERNAL_ERROR, "%s/%s: Incorrect params of function setTimeout", app_name, TAG_TIMER);
         mjs_return(mjs, MJS_INTERNAL_ERROR);
     }
 }
@@ -92,7 +98,7 @@ mjs_val_t thingjsTimerConstructor(struct mjs *mjs, cJSON *params) {
 }
 
 
-void thingjsBitPortRegister(void) {
+void thingjsTimerRegister(void) {
     static int thingjs_timer_cases[] = DEF_CASES(DEF_CASE(NON));
 
     static const struct st_thingjs_interface_manifest interface = {
