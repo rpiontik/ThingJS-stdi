@@ -86,25 +86,22 @@ mjs_val_t thingjsBitPortConstructor(struct mjs *mjs, cJSON *params) {
     gpio_pad_select_gpio(gpio);
 
     //Add protected property to interface
-    mjs_set(mjs, interface, "gpio", ~0, mjs_mk_number(mjs, gpio));
-
-    //Set protected flag
-    mjs_set_protected(mjs, interface, "gpio", ~0, true);
+    stdi_setProtectedProperty(mjs, interface, "gpio", mjs_mk_number(mjs, gpio));
 
     //Bind functions
-    mjs_set(mjs, interface, "set", ~0,
+    stdi_setProtectedProperty(mjs, interface, "set",
             mjs_mk_foreign_func(mjs, (mjs_func_ptr_t) thingjsBitPortSet));
-    mjs_set(mjs, interface, "get", ~0,
+    stdi_setProtectedProperty(mjs, interface, "get",
             mjs_mk_foreign_func(mjs, (mjs_func_ptr_t) thingjsBitPortGet));
-    mjs_set(mjs, interface, "direction", ~0,
+    stdi_setProtectedProperty(mjs, interface, "direction",
             mjs_mk_foreign_func(mjs, (mjs_func_ptr_t) thingjsBitPortDirection));
 
     //Consts
-    mjs_set(mjs, interface, "DIR_MODE_DISABLE", ~0, mjs_mk_number(mjs, GPIO_MODE_DISABLE));
-    mjs_set(mjs, interface, "DIR_MODE_DEF_INPUT", ~0, mjs_mk_number(mjs, GPIO_MODE_DEF_INPUT));
-    mjs_set(mjs, interface, "DIR_MODE_DEF_OUTPUT", ~0, mjs_mk_number(mjs, GPIO_MODE_DEF_OUTPUT));
-    mjs_set(mjs, interface, "DIR_MODE_INPUT_OUTPUT_OD", ~0, mjs_mk_number(mjs, GPIO_MODE_INPUT_OUTPUT_OD));
-    mjs_set(mjs, interface, "DIR_MODE_INPUT_OUTPUT", ~0, mjs_mk_number(mjs, GPIO_MODE_INPUT_OUTPUT));
+    stdi_setProtectedProperty(mjs, interface, "DIR_MODE_DISABLE", mjs_mk_number(mjs, GPIO_MODE_DISABLE));
+    stdi_setProtectedProperty(mjs, interface, "DIR_MODE_DEF_INPUT", mjs_mk_number(mjs, GPIO_MODE_DEF_INPUT));
+    stdi_setProtectedProperty(mjs, interface, "DIR_MODE_DEF_OUTPUT", mjs_mk_number(mjs, GPIO_MODE_DEF_OUTPUT));
+    stdi_setProtectedProperty(mjs, interface, "DIR_MODE_INPUT_OUTPUT_OD", mjs_mk_number(mjs, GPIO_MODE_INPUT_OUTPUT_OD));
+    stdi_setProtectedProperty(mjs, interface, "DIR_MODE_INPUT_OUTPUT", mjs_mk_number(mjs, GPIO_MODE_INPUT_OUTPUT));
 
     //Return mJS interface object
     return interface;
