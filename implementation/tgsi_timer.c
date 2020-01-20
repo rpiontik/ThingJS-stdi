@@ -82,6 +82,24 @@ static inline void thingjsSetInterval(struct mjs *mjs) {
     thingjsRunTimer(mjs, false);
 }
 
+static inline void thingjsClearTimer(struct mjs *mjs) {
+    //Get function params
+    mjs_val_t arg0 = mjs_arg(mjs, 0);
+
+    if (mjs_is_foreign(arg0)) {
+        if(xTimerDelete(mjs_get_ptr(mjs, arg0), 0) == pdPASS) {
+            mjs_return(mjs, MJS_OK);
+        } else {
+            mjs_set_errorf(mjs, MJS_INTERNAL_ERROR, "%s: Can not clear timer", TAG_TIMER);
+            mjs_return(mjs, MJS_INTERNAL_ERROR);
+        }
+    } else {
+        mjs_set_errorf(mjs, MJS_INTERNAL_ERROR, "%s: Incorrect internal params", TAG_TIMER);
+        mjs_return(mjs, MJS_INTERNAL_ERROR);
+    }
+
+    thingjsRunTimer(mjs, false);
+}
 
 mjs_val_t thingjsTimerConstructor(struct mjs *mjs, cJSON *params) {
     //Create mjs object
@@ -92,6 +110,12 @@ mjs_val_t thingjsTimerConstructor(struct mjs *mjs, cJSON *params) {
             mjs_mk_foreign_func(mjs, (mjs_func_ptr_t) thingjsSetTimeout));
     stdi_setProtectedProperty(mjs, interface, "setInterval",
             mjs_mk_foreign_func(mjs, (mjs_func_ptr_t) thingjsSetInterval));
+    stdi_setProtectedProperty(mjs, interface, "setInterval",
+                              mjs_mk_foreign_func(mjs, (mjs_func_ptr_t) thingjsSetInterval));
+    stdi_setProtectedProperty(mjs, interface, "clearInterval",
+                              mjs_mk_foreign_func(mjs, (mjs_func_ptr_t) thingjsClearTimer));
+    stdi_setProtectedProperty(mjs, interface, "clearTimeout",
+                              mjs_mk_foreign_func(mjs, (mjs_func_ptr_t) thingjsClearTimer));
 
     //Return mJS interface object
     return interface;
