@@ -15,7 +15,7 @@
 #include "thingjs_board.h"
 #include "thingjs_core.h"
 
-#define  INTERFACE_NAME "timer"
+#define  INTERFACE_NAME "timers"
 
 const char TAG_TIMER[] = INTERFACE_NAME;
 
