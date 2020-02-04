@@ -9,6 +9,7 @@
 #include <freertos/timers.h>
 #include <freertos/projdefs.h>
 #include <freertos/queue.h>
+#include <esp_log.h>
 #include "tgsi_bit_port.h"
 
 #include "sdti_utils.h"
@@ -20,7 +21,6 @@
 const char TAG_TIMER[] = INTERFACE_NAME;
 
 struct timer_params {
-    TimerHandle_t timer;    //Handle of timer
     TaskHandle_t process;   //Context owner
     struct mjs *context;    //mJS object
     bool is_interval;       //Is interval timer
@@ -51,12 +51,15 @@ static void thingjsRunTimer(struct mjs *mjs, bool is_interval) {
         char timer_name[256];
         uint32_t interval = mjs_get_int32(mjs, arg1);
         snprintf(timer_name, sizeof(timer_name) - 1, "%s/%s/%d", app_name, TAG_TIMER, 0); //todo - need to ID of timer
+        ESP_LOGD(TAG_TIMER, "Registered timer [%s]", timer_name);
 
         struct timer_params * params = malloc(sizeof(struct timer_params));
+        params->process = xTaskGetCurrentTaskHandle();
         params->context = mjs;
         params->is_interval = is_interval;
         params->callback = arg0;
         params->params = arg3;
+
 
         TimerHandle_t timer_handle = xTimerCreate(timer_name, interval, is_interval ?  pdTRUE : pdFALSE,
                 params, vm_timer_callback);
@@ -75,11 +78,11 @@ static void thingjsRunTimer(struct mjs *mjs, bool is_interval) {
 }
 
 static inline void thingjsSetTimeout(struct mjs *mjs) {
-    thingjsRunTimer(mjs, true);
+    thingjsRunTimer(mjs, false);
 }
 
 static inline void thingjsSetInterval(struct mjs *mjs) {
-    thingjsRunTimer(mjs, false);
+    thingjsRunTimer(mjs, true);
 }
 
 static inline void thingjsClearTimer(struct mjs *mjs) {
@@ -102,6 +105,14 @@ static inline void thingjsClearTimer(struct mjs *mjs) {
 }
 
 mjs_val_t thingjsTimerConstructor(struct mjs *mjs, cJSON *params) {
+    //Validate preset params
+    //The params must have timer resource
+    if (!cJSON_IsNumber(params) || (params->valueint != RES_TIMER)) {
+        mjs_set_errorf(mjs, MJS_INTERNAL_ERROR, "%s: Incorrect params", TAG_TIMER);
+        mjs_return(mjs, MJS_INTERNAL_ERROR);
+        return MJS_UNDEFINED;
+    }
+
     //Create mjs object
     mjs_val_t interface = mjs_mk_object(mjs);
 
@@ -123,7 +134,8 @@ mjs_val_t thingjsTimerConstructor(struct mjs *mjs, cJSON *params) {
 
 
 void thingjsTimerRegister(void) {
-    static int thingjs_timer_cases[] = DEF_CASES(DEF_CASE(NON));
+    static int thingjs_timer_cases[] = DEF_CASES(DEF_CASE(RES_TIMER));
+
 
     static const struct st_thingjs_interface_manifest interface = {
             .type           = INTERFACE_NAME,
