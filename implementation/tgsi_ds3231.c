@@ -18,9 +18,10 @@
 #include "thingjs_board.h"
 #include "thingjs_core.h"
 
-#define  INTERFACE_NAME "clock"
+#define  INTERFACE_NAME "DS3231"
 
 const char TAG_CLOCK[] = INTERFACE_NAME;
+
 
 static void thingjsGetTime(struct mjs *mjs) {
     time_t now;
@@ -81,8 +82,11 @@ mjs_val_t thingjsClockConstructor(struct mjs *mjs, cJSON *params) {
 void thingjsClockDestructor(struct mjs * mjs, mjs_val_t subject) {
 }
 
-void thingjsClockRegister(void) {
-    static int thingjs_clock_cases[] = DEF_CASES(DEF_CASE(RES_VIRTUAL));
+void thingjsDS3231Register(void) {
+    static int thingjs_clock_cases[] = DEF_CASES(
+            //       SDA     SCL               SDA    SCL
+            DEF_CASE(GPIO15, GPIO12), DEF_CASE(GPIO4, GPIO16)
+    );
 
     static const struct st_thingjs_interface_manifest interface = {
             .type           = INTERFACE_NAME,

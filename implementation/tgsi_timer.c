@@ -165,7 +165,7 @@ void thingjsTimersDestructor(struct mjs * mjs, mjs_val_t subject) {
 }
 
 void thingjsTimersRegister(void) {
-    static int thingjs_timer_cases[] = DEF_CASES(DEF_CASE(RES_TIMER));
+    static int thingjs_timer_cases[] = DEF_CASES(DEF_CASE(RES_VIRTUAL));
 
 
     static const struct st_thingjs_interface_manifest interface = {

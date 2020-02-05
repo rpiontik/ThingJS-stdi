@@ -8,9 +8,11 @@
 #include "implementation/tgsi_bit_port.h"
 #include "implementation/tgsi_timer.h"
 #include "implementation/tgsi_clock.h"
+#include "implementation/tgsi_ds3231.h"
 
 void thingjsSTDIRegister(void) {
     thingjsBitPortRegister();
     thingjsTimersRegister();
     thingjsClockRegister();
+    thingjsDS3231Register();
 }
