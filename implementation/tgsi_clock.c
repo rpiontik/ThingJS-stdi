@@ -43,23 +43,6 @@ static void thingjsSetTime(struct mjs *mjs) {
 }
 
 mjs_val_t thingjsClockConstructor(struct mjs *mjs, cJSON *params) {
-    //Validate preset params
-    //The params must have timer resource
-    if (!cJSON_IsArray(params) || !(cJSON_GetArraySize(params) == 2)) {
-        mjs_set_errorf(mjs, MJS_INTERNAL_ERROR, "%s: Incorrect params", TAG_CLOCK);
-        mjs_return(mjs, MJS_INTERNAL_ERROR);
-        return MJS_UNDEFINED;
-    }
-
-    cJSON * sda = cJSON_GetArrayItem(params, 0);
-    cJSON * scl = cJSON_GetArrayItem(params, 1);
-
-    if (!cJSON_IsNumber(sda) || !cJSON_IsNumber(scl) ) {
-        mjs_set_errorf(mjs, MJS_INTERNAL_ERROR, "%s: Incorrect params", TAG_CLOCK);
-        mjs_return(mjs, MJS_INTERNAL_ERROR);
-        return MJS_UNDEFINED;
-    }
-
     //Create mjs object
     mjs_val_t interface = mjs_mk_object(mjs);
 

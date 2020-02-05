@@ -20,7 +20,7 @@
 
 #define  INTERFACE_NAME "DS3231"
 
-const char TAG_CLOCK[] = INTERFACE_NAME;
+const char TAG_DS3231[] = INTERFACE_NAME;
 
 
 static void thingjsGetTime(struct mjs *mjs) {
@@ -36,7 +36,6 @@ static void thingjsSetTime(struct mjs *mjs) {
         mjs_set_errorf(mjs, MJS_INTERNAL_ERROR, "%s: Incorrect setTime parameter", pcTaskGetTaskName(NULL));
         mjs_return(mjs, MJS_INTERNAL_ERROR);
     } else {
-
         struct timeval now = { .tv_sec = mjs_get_int32(mjs, arg0)};
         settimeofday(&now, NULL);
 
@@ -44,11 +43,11 @@ static void thingjsSetTime(struct mjs *mjs) {
     }
 }
 
-mjs_val_t thingjsClockConstructor(struct mjs *mjs, cJSON *params) {
+mjs_val_t thingjsDS3231Constructor(struct mjs *mjs, cJSON *params) {
     //Validate preset params
     //The params must have timer resource
     if (!cJSON_IsArray(params) || !(cJSON_GetArraySize(params) == 2)) {
-        mjs_set_errorf(mjs, MJS_INTERNAL_ERROR, "%s: Incorrect params", TAG_CLOCK);
+        mjs_set_errorf(mjs, MJS_INTERNAL_ERROR, "%s: Incorrect params", TAG_DS3231);
         mjs_return(mjs, MJS_INTERNAL_ERROR);
         return MJS_UNDEFINED;
     }
@@ -57,7 +56,7 @@ mjs_val_t thingjsClockConstructor(struct mjs *mjs, cJSON *params) {
     cJSON * scl = cJSON_GetArrayItem(params, 1);
 
     if (!cJSON_IsNumber(sda) || !cJSON_IsNumber(scl) ) {
-        mjs_set_errorf(mjs, MJS_INTERNAL_ERROR, "%s: Incorrect params", TAG_CLOCK);
+        mjs_set_errorf(mjs, MJS_INTERNAL_ERROR, "%s: Incorrect params", TAG_DS3231);
         mjs_return(mjs, MJS_INTERNAL_ERROR);
         return MJS_UNDEFINED;
     }
@@ -79,20 +78,17 @@ mjs_val_t thingjsClockConstructor(struct mjs *mjs, cJSON *params) {
     return interface;
 }
 
-void thingjsClockDestructor(struct mjs * mjs, mjs_val_t subject) {
-}
-
 void thingjsDS3231Register(void) {
-    static int thingjs_clock_cases[] = DEF_CASES(
+    static int thingjs_ds3231_cases[] = DEF_CASES(
             //       SDA     SCL               SDA    SCL
             DEF_CASE(GPIO15, GPIO12), DEF_CASE(GPIO4, GPIO16)
     );
 
     static const struct st_thingjs_interface_manifest interface = {
             .type           = INTERFACE_NAME,
-            .constructor    = thingjsClockConstructor,
-            .destructor     = thingjsClockDestructor,
-            .cases          = thingjs_clock_cases
+            .constructor    = thingjsDS3231Constructor,
+            .destructor     = NULL,
+            .cases          = thingjs_ds3231_cases
     };
 
     thingjsRegisterInterface(&interface);

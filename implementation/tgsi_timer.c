@@ -121,14 +121,6 @@ static inline void thingjsClearTimer(struct mjs *mjs) {
 }
 
 mjs_val_t thingjsTimersConstructor(struct mjs *mjs, cJSON *params) {
-    //Validate preset params
-    //The params must have timer resource
-    if (!cJSON_IsNumber(params) || (params->valueint != RES_TIMER)) {
-        mjs_set_errorf(mjs, MJS_INTERNAL_ERROR, "%s: Incorrect params", TAG_TIMER);
-        mjs_return(mjs, MJS_INTERNAL_ERROR);
-        return MJS_UNDEFINED;
-    }
-
     //Create mjs object
     mjs_val_t interface = mjs_mk_object(mjs);
 
