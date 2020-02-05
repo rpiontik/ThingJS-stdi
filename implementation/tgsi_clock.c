@@ -35,7 +35,6 @@ static void thingjsSetTime(struct mjs *mjs) {
         mjs_set_errorf(mjs, MJS_INTERNAL_ERROR, "%s: Incorrect setTime parameter", pcTaskGetTaskName(NULL));
         mjs_return(mjs, MJS_INTERNAL_ERROR);
     } else {
-
         struct timeval now = { .tv_sec = mjs_get_int32(mjs, arg0)};
         settimeofday(&now, NULL);
 
@@ -64,10 +63,6 @@ mjs_val_t thingjsClockConstructor(struct mjs *mjs, cJSON *params) {
     //Create mjs object
     mjs_val_t interface = mjs_mk_object(mjs);
 
-    //Create timers collection
-    stdi_setProtectedProperty(mjs, interface, "$sda", mjs_mk_number(mjs, sda->valueint));
-    stdi_setProtectedProperty(mjs, interface, "$scl", mjs_mk_number(mjs, scl->valueint));
-
     //Bind functions
     stdi_setProtectedProperty(mjs, interface, "setTime",
             mjs_mk_foreign_func(mjs, (mjs_func_ptr_t) thingjsSetTime));
@@ -78,16 +73,13 @@ mjs_val_t thingjsClockConstructor(struct mjs *mjs, cJSON *params) {
     return interface;
 }
 
-void thingjsClockDestructor(struct mjs * mjs, mjs_val_t subject) {
-}
-
 void thingjsClockRegister(void) {
     static int thingjs_clock_cases[] = DEF_CASES(DEF_CASE(RES_VIRTUAL));
 
     static const struct st_thingjs_interface_manifest interface = {
             .type           = INTERFACE_NAME,
             .constructor    = thingjsClockConstructor,
-            .destructor     = thingjsClockDestructor,
+            .destructor     = NULL,
             .cases          = thingjs_clock_cases
     };
 
