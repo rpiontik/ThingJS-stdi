@@ -5,6 +5,6 @@
 #ifndef THINGJS_TGSI_TIMER_H
 #define THINGJS_TGSI_TIMER_H
 
-void thingjsTimerRegister(void);
+void thingjsTimersRegister(void);
 
 #endif //THINGJS_TGSI_TIMER_H

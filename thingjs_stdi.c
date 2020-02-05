@@ -10,5 +10,5 @@
 
 void thingjsSTDIRegister(void) {
     thingjsBitPortRegister();
-    thingjsTimerRegister();
+    thingjsTimersRegister();
 }

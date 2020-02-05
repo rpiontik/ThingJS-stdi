@@ -120,6 +120,7 @@ void thingjsBitPortRegister(void) {
     static const struct st_thingjs_interface_manifest interface = {
             .type           = "bit_port",
             .constructor    = thingjsBitPortConstructor,
+            .destructor     = NULL,
             .cases          = thingjs_bit_port_cases
     };
 
