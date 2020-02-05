@@ -3,9 +3,9 @@
  *      Author: rpiontik
  */
 
-#ifndef STDI_BIT_PORT_H_
-#define STDI_BIT_PORT_H_
+#ifndef STDI_LEDC_H_
+#define STDI_LEDC_H_
 
-void thingjsBitPortRegister(void);
+void thingjsLEDCRegister(void);
 
-#endif /* STDI_1WIRE_H_ */
+#endif /* STDI_LEDC_H_ */
