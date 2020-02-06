@@ -3,15 +3,22 @@
  *      Author: rpiontik
  */
 
+#include <string.h>
+
 #include "tgsi_ledc.h"
 
-#include "driver/gpio.h"
+#include "driver/ledc.h"
+#include <esp_log.h>
 
 #include "sdti_utils.h"
 #include "thingjs_board.h"
 #include "thingjs_core.h"
 
 const char TAG_LEDC[] = "LEDC";
+
+#define LEDC_NUMBER_CHANNELS 16
+#define LEDC_CONFIG_DEFAULT_FREQUENCY 2440
+#define LEDC_CONFIG_DEFAULT_RESOLUTION 15
 
 typedef struct {
     struct mjs * process;
