@@ -106,7 +106,7 @@ static int ledc_touch(void){
 
         ledc_inited = 1;
     }
-    return 0;
+    return ESP_OK;
 }
 
 
@@ -238,7 +238,7 @@ mjs_val_t thingjsLEDCConstructor(struct mjs *mjs, cJSON *params) {
         return MJS_UNDEFINED;
 
     //Call LEDC configurator
-    if( 0!=ledc_touch()) return MJS_UNDEFINED;
+    if(0 != ledc_touch()) return MJS_UNDEFINED;
 
     //Create mJS interface object
     mjs_val_t interface = mjs_mk_object(mjs);
@@ -251,19 +251,14 @@ mjs_val_t thingjsLEDCConstructor(struct mjs *mjs, cJSON *params) {
     }
 
     //Add protected property to interface
-    mjs_set(mjs, interface, "channel", ~0, mjs_mk_number(mjs, channel));
-    mjs_set(mjs, interface, "gpio", ~0, mjs_mk_number(mjs, params->valueint));
-    mjs_set(mjs, interface, "duty", ~0, mjs_mk_number(mjs, (1 << ledcConfig->ledcTimersResolution) - 1));
-    mjs_set(mjs, interface, "inverce", ~0, mjs_mk_boolean(mjs, 1));
-
-    //Set protected flag
-    mjs_set_protected(mjs, interface, "channel", ~0, true);
-    mjs_set_protected(mjs, interface, "gpio", ~0, true);
-    mjs_set_protected(mjs, interface, "duty", ~0, true);
-    mjs_set_protected(mjs, interface, "inverce", ~0, true);
+    stdi_setProtectedProperty(mjs, interface, "channel", mjs_mk_number(mjs, channel));
+    stdi_setProtectedProperty(mjs, interface, "gpio", mjs_mk_number(mjs, params->valueint));
+    stdi_setProtectedProperty(mjs, interface, "duty", mjs_mk_number(mjs, (1 << ledcConfig->ledcTimersResolution) - 1));
+    stdi_setProtectedProperty(mjs, interface, "inverse", mjs_mk_boolean(mjs, 1));
 
     //Bind functions
-    mjs_set(mjs, interface, "setDutyToChannelWithFade", ~0, mjs_mk_foreign_func(mjs, (mjs_func_ptr_t) hwi_vm_func_setDutyToChannelWithFade));
+    stdi_setProtectedProperty(mjs, interface, "setDutyToChannelWithFade",
+            mjs_mk_foreign_func(mjs, (mjs_func_ptr_t) hwi_vm_func_setDutyToChannelWithFade));
 
     //Bind in LED controller
     hwi_bind_ledc_interface(mjs, interface);
