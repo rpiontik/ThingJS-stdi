@@ -32,31 +32,6 @@ typedef struct ledcConfig_s {
 
 static ledcConfig_t* ledcConfig;
 
-mjs_val_t thingjsLEDCConstructor(struct mjs * mjs, cJSON * params);
-
-void thingjsLEDCRegister(void) {
-    //Declare available pin cases for interface
-    static int thingjs_ledc_cases[] = DEF_CASES(
-            DEF_CASE(GPIO2),	DEF_CASE(GPIO4),	DEF_CASE(GPIO5),
-            DEF_CASE(GPIO12),	DEF_CASE(GPIO13),	DEF_CASE(GPIO14),	DEF_CASE(GPIO15),
-            DEF_CASE(GPIO16),	DEF_CASE(GPIO17),	DEF_CASE(GPIO18),	DEF_CASE(GPIO19),
-            DEF_CASE(GPIO21),	DEF_CASE(GPIO22),	DEF_CASE(GPIO23),	DEF_CASE(GPIO25),
-            DEF_CASE(GPIO26),	DEF_CASE(GPIO27),	DEF_CASE(GPIO32),	DEF_CASE(GPIO33),
-            DEF_CASE(GPIO34),	DEF_CASE(GPIO35),	DEF_CASE(GPIO36),	DEF_CASE(GPIO39)
-    );
-
-    // GPIO1, GPIO3 Used for TX/RX of UART programmer
-
-    //Declare interface's manifest
-    static const struct st_thingjs_interface_manifest interface = {
-            .type			= "ledc",
-            .constructor	= thingjsLEDCConstructor,
-            .cases			= thingjs_ledc_cases
-    };
-
-    thingjsRegisterInterface(&interface);
-}
-
 const char TAG_LEDC[] = "LEDC";
 
 #define LEDC_NUMBER_CHANNELS 16
@@ -70,57 +45,6 @@ static st_bind_channel ledc_binded_channels[LEDC_NUMBER_CHANNELS] = {0};
 
 //Flag of started LEDC
 static bool ledc_inited = false;
-
-/*
-typedef struct {
-	uint32_t mode;
-    uint32_t duty_start;
-    uint32_t duty_stop;
-    uint32_t duty_current;
-    uint32_t fade_time_ms;
-	uint32_t current_time_ms;
-} st_ledc_channel_fade;
-
-static struct st_ledc_channel_fade ledc_channel_fades[LEDC_NUMBER_CHANNELS];
-
-static void ledc_control_task(void *data) {
-	ESP_LOGI(TAG_LEDC, "LED Control Task starting");
-
-	memset(ledc_channel_fades, 0, sizeof(ledc_channel_fades));
-
-	uint32_t channel = 0;
-	uint32_t duty = 0;
-
-	for(;;) {
-		for ( channel = 0; channel < LEDC_NUMBER_CHANNELS; channel++ ) {
-			st_ledc_channel_fade * channel = &ledc_channel_fades[channel];
-			switch (channel->mode ) {
-			case _ledcChannelModeOff:
-				if ( hwConfig.channels[channel].Duty != 0 )
-					_ledc_setDutyToChannel(channel, 0);
-				break;
-			case _ledcChannelModeOn:
-				//_ledc_setDutyToChannel(channel, hwConfig.channels[channel].Duty);
-			case _ledcChannelModeFadeRun:
-				duty = _ledcCalculateFadeValue(
-							channel->duty_start,
-							channel->duty_stop,
-							channel->fade_time_ms,
-							channel->current_time_ms
-						);
-				channel->current_time_ms += 50;
-				_ledc_setDutyToChannel(channel, duty);
-
-				if (channel->current_time_ms >= channel->fade_time_ms)
-					channel->mode = _ledcChannelModeOn;
-				break;
-			}
-		}
-		vTaskDelay( 50 / portTICK_PERIOD_MS );
-	}
-}
-
-*/
 
 static esp_err_t ledc_timer_reconfig(uint32_t freq, ledc_timer_bit_t resolution)
 {
@@ -351,6 +275,28 @@ mjs_val_t thingjsLEDCConstructor(struct mjs * mjs, cJSON * params) {
 	return interface;
 }
 
+void thingjsLEDCRegister(void) {
+    //Declare available pin cases for interface
+    static int thingjs_ledc_cases[] = DEF_CASES(
+            DEF_CASE(GPIO2),	DEF_CASE(GPIO4),	DEF_CASE(GPIO5),
+            DEF_CASE(GPIO12),	DEF_CASE(GPIO13),	DEF_CASE(GPIO14),	DEF_CASE(GPIO15),
+            DEF_CASE(GPIO16),	DEF_CASE(GPIO17),	DEF_CASE(GPIO18),	DEF_CASE(GPIO19),
+            DEF_CASE(GPIO21),	DEF_CASE(GPIO22),	DEF_CASE(GPIO23),	DEF_CASE(GPIO25),
+            DEF_CASE(GPIO26),	DEF_CASE(GPIO27),	DEF_CASE(GPIO32),	DEF_CASE(GPIO33),
+            DEF_CASE(GPIO34),	DEF_CASE(GPIO35),	DEF_CASE(GPIO36),	DEF_CASE(GPIO39)
+    );
+
+    // GPIO1, GPIO3 Used for TX/RX of UART programmer
+
+    //Declare interface's manifest
+    static const struct st_thingjs_interface_manifest interface = {
+            .type			= "ledc",
+            .constructor	= thingjsLEDCConstructor,
+            .cases			= thingjs_ledc_cases
+    };
+
+    thingjsRegisterInterface(&interface);
+}
 
 
 
