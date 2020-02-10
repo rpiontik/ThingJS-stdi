@@ -246,6 +246,8 @@ mjs_val_t thingjsLEDCConstructor(struct mjs *mjs, cJSON *params) {
 }
 
 void thingjsLEDCRegister(void) {
+    ledc_fade_func_install(0);
+
     static int thingjs_ledc_cases[] = DEF_CASES(
             DEF_CASE(
                     DEF_ENUM(RES_LEDC_0, RES_LEDC_1),
