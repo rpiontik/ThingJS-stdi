@@ -61,7 +61,8 @@ static void thingjsLEDCSetFadeTimeAndStart(struct mjs *mjs) {
     esp_err_t result = ledc_set_fade_time_and_start(speed_mode, channel, target_duty, fade_ms, LEDC_FADE_NO_WAIT);
 
     if (ESP_OK != result) {
-        mjs_set_errorf(mjs, MJS_INTERNAL_ERROR, "%s: Can not start fade function", TAG_LEDC);
+        mjs_set_errorf(mjs, MJS_INTERNAL_ERROR, "%s: Can not start fade function channel=[%d] speed_mode=[%d] target_duty=[%d] fade_ms=[%lu]",
+                TAG_LEDC, channel, speed_mode, target_duty, fade_ms);
         mjs_return(mjs, MJS_INTERNAL_ERROR);
         return;
     }
@@ -96,7 +97,8 @@ static void thingjsLEDCReconfigChannel(struct mjs *mjs) {
     ledc_channel.channel    = mjs_get_int32(mjs, mjs_get(mjs, this_obj, DEF_STR_CHANNEL, ~0));
     ledc_channel.gpio_num   = mjs_get_int32(mjs, mjs_get(mjs, this_obj, DEF_STR_GPIO, ~0));
     ledc_channel.speed_mode = LEDC_HIGH_SPEED_MODE;
-    ledc_channel.duty       = inverse ? ~(duty) : duty;
+    ledc_channel.duty       = 0; //inverse ? ~(duty) : duty;
+    ledc_channel.hpoint     = 0;
 
     //Get driver/timer
     const mjs_val_t mjs_driver = mjs_get(mjs, this_obj, DEF_STR_DRIVER, ~0);
