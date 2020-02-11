@@ -35,6 +35,8 @@ const char DEF_STR_FADE[]           = "fade";
 #define LEDC_CONFIG_DEFAULT_RESOLUTION  15
 
 static void thingjsLEDCSetFadeTimeAndStart(struct mjs *mjs) {
+    ESP_LOGD(TAG_LEDC, "START FADE");
+
     //Get function params
     mjs_val_t arg0 = mjs_arg(mjs, 0);   //Target duty
     mjs_val_t arg1 = mjs_arg(mjs, 1);   //Fade ms
@@ -56,7 +58,7 @@ static void thingjsLEDCSetFadeTimeAndStart(struct mjs *mjs) {
     const int speed_mode = mjs_get_int32(mjs, mjs_get(mjs, mjs_driver, DEF_STR_SPEED_MODE, ~0));
 
     const uint32_t target_duty = (uint32_t)mjs_get_int32(mjs, arg0) & 0xFFFF;
-    const long fade_ms = 100; //mjs_get_int32(mjs, arg1);
+    const unsigned long fade_ms = mjs_get_int32(mjs, arg1);
 
     esp_err_t result = ledc_set_fade_time_and_start(speed_mode, channel, target_duty, fade_ms, LEDC_FADE_NO_WAIT);
 
@@ -68,9 +70,11 @@ static void thingjsLEDCSetFadeTimeAndStart(struct mjs *mjs) {
     }
 
     mjs_return(mjs, MJS_OK);
+    ESP_LOGD(TAG_LEDC, "END FADE");
 }
 
 static void thingjsLEDCReconfigChannel(struct mjs *mjs) {
+    ESP_LOGD(TAG_LEDC, "START RECONFIG CHANNEL");
     //Get this mjs object (context)
     const mjs_val_t this_obj = mjs_get_this(mjs);
     //Get inverse mode
@@ -93,16 +97,11 @@ static void thingjsLEDCReconfigChannel(struct mjs *mjs) {
     }
 
     ledc_channel_config_t ledc_channel  = {0};
-    //Get channel
-    ledc_channel.channel    = mjs_get_int32(mjs, mjs_get(mjs, this_obj, DEF_STR_CHANNEL, ~0));
-    ledc_channel.gpio_num   = mjs_get_int32(mjs, mjs_get(mjs, this_obj, DEF_STR_GPIO, ~0));
-    ledc_channel.speed_mode = LEDC_HIGH_SPEED_MODE;
-    ledc_channel.duty       = 0; //inverse ? ~(duty) : duty;
-    ledc_channel.hpoint     = 0;
 
     //Get driver/timer
     const mjs_val_t mjs_driver = mjs_get(mjs, this_obj, DEF_STR_DRIVER, ~0);
     const mjs_val_t mjs_timer = mjs_get(mjs, mjs_driver, DEF_STR_TIMER, ~0);
+    const mjs_val_t resolution = mjs_get_int32(mjs, mjs_get(mjs, mjs_driver, DEF_STR_RESOLUTION, ~0));
     const int timer = mjs_get_int32(mjs, mjs_timer);
 
     switch(timer) {
@@ -118,10 +117,15 @@ static void thingjsLEDCReconfigChannel(struct mjs *mjs) {
             return;
     }
 
-    ESP_LOGD(TAG_LEDC, "Try to config channel=[%d] gpio=[%d] speed_mode=[%d] duty=[%d] timer=[%d]",
-            ledc_channel.channel, ledc_channel.gpio_num, ledc_channel.speed_mode, ledc_channel.duty, timer);
+    //Get channel
+    ledc_channel.channel    = mjs_get_int32(mjs, mjs_get(mjs, this_obj, DEF_STR_CHANNEL, ~0));
+    ledc_channel.gpio_num   = mjs_get_int32(mjs, mjs_get(mjs, this_obj, DEF_STR_GPIO, ~0));
+    ledc_channel.speed_mode = LEDC_HIGH_SPEED_MODE;
+    ledc_channel.duty       = inverse ? (1 << resolution) - 1 : 0;
 
+    ESP_LOGD(TAG_LEDC, "BEFORE RECONFIG CHANNEL");
     esp_err_t result = ledc_channel_config(&ledc_channel);
+    ESP_LOGD(TAG_LEDC, "AFTER RECONFIG CHANNEL");
 
     if(ESP_OK == result) {
         stdi_setProtectedProperty(mjs, this_obj, DEF_STR_INVERSE, mjs_mk_boolean(mjs, inverse));
@@ -131,12 +135,12 @@ static void thingjsLEDCReconfigChannel(struct mjs *mjs) {
         mjs_return(mjs, MJS_INTERNAL_ERROR);
     }
 
-    ESP_LOGD(TAG_LEDC, "OK!");
-
     mjs_return(mjs, MJS_OK);
+    ESP_LOGD(TAG_LEDC, "END RECONFIG CHANNEL");
 }
 
 static void thingjsLEDCReconfigDriver(struct mjs *mjs) {
+    ESP_LOGD(TAG_LEDC, "START RECONFIG DRIVER");
     //Get this mjs object (context)
     const mjs_val_t this_obj = mjs_get_this(mjs);
 
@@ -176,9 +180,6 @@ static void thingjsLEDCReconfigDriver(struct mjs *mjs) {
             break;
     }
 
-    ESP_LOGD(TAG_LEDC, "Try to config driver resolution=[%d] freq_hz=[%d] speed_mode=[%d] timer=[%d]",
-             resolution, frequency, speed_mode, timer);
-
     // Set configuration of timer0 for high speed channels
     esp_err_t result = ledc_timer_config(&ledc_timer);
     if ( ESP_OK == result ) {
@@ -191,9 +192,8 @@ static void thingjsLEDCReconfigDriver(struct mjs *mjs) {
         return;
     }
 
-    ESP_LOGD(TAG_LEDC, "OK!");
-
     mjs_return(mjs, MJS_OK);
+    ESP_LOGD(TAG_LEDC, "END RECONFIG DRIVER");
 }
 
 mjs_val_t thingjsLEDCConstructor(struct mjs *mjs, cJSON *params) {
