@@ -60,7 +60,10 @@ static void thingjsLEDCSetFadeTimeAndStart(struct mjs *mjs) {
     const uint32_t target_duty = (uint32_t)mjs_get_int32(mjs, arg0) & 0xFFFF;
     const unsigned long fade_ms = mjs_get_int32(mjs, arg1);
 
-    esp_err_t result = ledc_set_fade_time_and_start(speed_mode, channel, target_duty, fade_ms, LEDC_FADE_NO_WAIT);
+    ESP_LOGD(TAG_LEDC, "APPLY FADE speed=%d, channel=%d, target=%d, fade_ms=%lu", speed_mode, channel, target_duty, fade_ms);
+    const esp_err_t result = fade_ms != 0
+                            ? ledc_set_fade_time_and_start(speed_mode, channel, target_duty, fade_ms, LEDC_FADE_NO_WAIT)
+                            : ledc_set_duty_and_update(speed_mode, channel, target_duty, 0);
 
     if (ESP_OK != result) {
         mjs_set_errorf(mjs, MJS_INTERNAL_ERROR, "%s: Can not start fade function channel=[%d] speed_mode=[%d] target_duty=[%d] fade_ms=[%lu]",
@@ -124,6 +127,7 @@ static void thingjsLEDCReconfigChannel(struct mjs *mjs) {
     ledc_channel.duty       = inverse ? (1 << resolution) - 1 : 0;
 
     ESP_LOGD(TAG_LEDC, "BEFORE RECONFIG CHANNEL");
+    gpio_set_direction(ledc_channel.gpio_num, GPIO_MODE_OUTPUT);
     esp_err_t result = ledc_channel_config(&ledc_channel);
     ESP_LOGD(TAG_LEDC, "AFTER RECONFIG CHANNEL");
 
