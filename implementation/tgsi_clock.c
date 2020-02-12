@@ -8,10 +8,7 @@
 #include "freertos/FreeRTOSConfig.h"
 #include "freertos/FreeRTOS.h"
 #include <freertos/timers.h>
-#include <freertos/projdefs.h>
-#include <freertos/queue.h>
 #include <esp_log.h>
-#include "tgsi_bit_port.h"
 #include <sys/time.h>
 
 #include "sdti_utils.h"
