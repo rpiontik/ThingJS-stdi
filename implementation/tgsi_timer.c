@@ -31,13 +31,7 @@ struct timer_params {
 
 void vm_timer_callback(TimerHandle_t xTimer) {
     struct timer_params *params = (struct timer_params *) pvTimerGetTimerID(xTimer);
-
     thingjsSyncCallMJSFunction(params->process, params->context, params->callback, params->params);
-
-    if (!params->is_interval) {
-        free(params);
-        xTimerDelete(xTimer, 0);
-    }
 }
 
 static void thingjsRunTimer(struct mjs *mjs, bool is_interval) {
@@ -137,6 +131,7 @@ mjs_val_t thingjsTimersConstructor(struct mjs *mjs, cJSON *params) {
 
     //Bind functions
     //Timeout
+    //todo NEED TO ADD DESCRIPTION REGARDING MANUAL FREE TIMER HANDLER
     stdi_setProtectedProperty(mjs, interface, "setTimeout",
             mjs_mk_foreign_func(mjs, (mjs_func_ptr_t) thingjsSetTimeout));
     stdi_setProtectedProperty(mjs, interface, "clearTimeout",
@@ -147,6 +142,7 @@ mjs_val_t thingjsTimersConstructor(struct mjs *mjs, cJSON *params) {
             mjs_mk_foreign_func(mjs, (mjs_func_ptr_t) thingjsSetInterval));
     stdi_setProtectedProperty(mjs, interface, "clearInterval",
             mjs_mk_foreign_func(mjs, (mjs_func_ptr_t) thingjsClearTimer));
+
 
     //Return mJS interface object
     return interface;
