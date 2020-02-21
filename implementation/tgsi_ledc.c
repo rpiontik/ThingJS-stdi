@@ -3,6 +3,10 @@
  *      Author: rpiontik
  */
 
+#include <freertos/FreeRTOSConfig.h>
+#include <freertos/FreeRTOS.h>
+#include <freertos/task.h>
+
 #include <string.h>
 
 #include "tgsi_ledc.h"
@@ -31,8 +35,185 @@ const char DEF_STR_GPIO[]           = "gpio";
 const char DEF_STR_RECONFIG[]       = "reconfig";
 const char DEF_STR_FADE[]           = "fade";
 
+TaskHandle_t thingjsLEDCtaskHandle  = NULL;
+
 #define LEDC_CONFIG_DEFAULT_FREQUENCY   2440
 #define LEDC_CONFIG_DEFAULT_RESOLUTION  15
+
+typedef struct {
+    uint32_t DutyStart;
+    uint32_t DutyStop;
+    uint32_t FadeTimeMs;
+    uint32_t CurrentTimeMs;
+    uint8_t  Mode;
+    uint8_t  Inverse;
+    uint8_t  Resolution;
+} __attribute__ ((packed)) thingjsLEDCChannelFade_t;
+
+thingjsLEDCChannelFade_t thingjsLEDCChannelFades[2][8];
+
+enum thingjsLEDCChannelMode {
+    thingjsLEDCChannelModeNotInUse = 0,
+    thingjsLEDCChannelModeOff,
+    thingjsLEDCChannelModeOn,
+    thingjsLEDCChannelModeFadeRun
+};
+
+uint32_t thingjsLEDCCalculateFadeValue(uint32_t dutyStart, uint32_t dutyStop, uint32_t fadeTimeMs, uint32_t fadeTimeCurrent)
+{
+    uint32_t dutyDiff = 0;
+    uint32_t dutyCurrent = 0;
+
+    if (0 == fadeTimeMs)
+        return dutyStop;
+
+    if (fadeTimeCurrent == fadeTimeMs)
+        return dutyStop;
+
+    if (dutyStart == dutyStop)
+        return dutyStop;
+
+    if (dutyStart > dutyStop) {
+        dutyDiff = dutyStart - dutyStop;
+        dutyCurrent = dutyStart - (uint32_t)((((((uint64_t) fadeTimeCurrent) << 10) * (uint64_t) dutyDiff) / (uint64_t) fadeTimeMs) >> 10);
+    } else {
+        dutyDiff = dutyStop - dutyStart;
+        dutyCurrent = dutyStart + (uint32_t)((((((uint64_t)fadeTimeCurrent) << 10) * (uint64_t) dutyDiff) / (uint64_t) fadeTimeMs) >> 10);
+    }
+
+    return dutyCurrent;
+}
+
+void hwInitPCBFenixV1I1(void)
+{
+    gpio_config_t io_conf;
+    //disable interrupt
+    io_conf.intr_type = GPIO_PIN_INTR_DISABLE;
+    //set as output mode
+    io_conf.mode = GPIO_MODE_OUTPUT;
+    //bit mask of the pins that you want to set
+    io_conf.pin_bit_mask = ((1ULL<<22)|(1ULL<<18)|(1ULL<<23)|(1ULL<<19)|(1ULL<<21));
+    //disable pull-down mode
+    io_conf.pull_down_en = 0;
+    //disable pull-up mode
+    io_conf.pull_up_en = 0;
+    //configure GPIO with the given settings
+    gpio_config(&io_conf);
+
+    gpio_set_level(22,1); //Power on for DRV
+    gpio_set_level(18,0); //LED channel off
+    gpio_set_level(23,0); //LED channel off
+    gpio_set_level(21,0); //LED channel off
+    gpio_set_level(19,0); //LED channel off
+}
+
+esp_err_t thingjsLEDCSetFadeWithTime(uint32_t speed_mode,uint32_t channel,uint32_t target_duty,uint32_t fade_ms)
+{
+    esp_err_t res = ESP_OK;
+
+    if (speed_mode > 1) return ESP_ERR_INVALID_ARG;
+    if (channel > 7) return ESP_ERR_INVALID_ARG;
+
+    if (fade_ms != 0) {
+        thingjsLEDCChannelFades[speed_mode][channel].DutyStart = ledc_get_duty(speed_mode, channel);
+        thingjsLEDCChannelFades[speed_mode][channel].DutyStop = target_duty;
+        thingjsLEDCChannelFades[speed_mode][channel].CurrentTimeMs = 0;
+        thingjsLEDCChannelFades[speed_mode][channel].FadeTimeMs = fade_ms;
+        thingjsLEDCChannelFades[speed_mode][channel].Mode = thingjsLEDCChannelModeFadeRun;
+    } else {
+        thingjsLEDCChannelFades[speed_mode][channel].DutyStart = target_duty;
+        thingjsLEDCChannelFades[speed_mode][channel].DutyStop = target_duty;
+        thingjsLEDCChannelFades[speed_mode][channel].CurrentTimeMs = 0;
+        thingjsLEDCChannelFades[speed_mode][channel].FadeTimeMs = 1;
+        thingjsLEDCChannelFades[speed_mode][channel].Mode = thingjsLEDCChannelModeOn;
+        res = ledc_set_duty_and_update(speed_mode, channel, target_duty, 0);
+    }
+
+    return res;
+}
+
+void thingjsLEDCControlTask(void *data)
+{
+    ESP_LOGI(TAG_LEDC, "LED Control Task starting");
+
+    ledc_fade_func_install(0);
+
+    vTaskDelay( 500 / portTICK_PERIOD_MS );
+
+    hwInitPCBFenixV1I1();
+
+    memset(thingjsLEDCChannelFades, 0, sizeof(thingjsLEDCChannelFade_t[2][8]) );
+
+
+    uint32_t channel = 0;
+    uint32_t duty = 0;
+    uint32_t mode = 0;
+    uint32_t maxDuty = 0;
+
+    for(;;)
+    {
+        for ( mode = 0; mode < 2; mode++)
+        {
+            for ( channel = 0; channel < 8; channel++ ) {
+
+                switch ( thingjsLEDCChannelFades[mode][channel].Mode ) {
+                    case thingjsLEDCChannelModeNotInUse:
+                        break;
+
+                    case thingjsLEDCChannelModeOff:
+                        duty = ledc_get_duty(mode,channel);
+                        maxDuty = (1 << thingjsLEDCChannelFades[mode][channel].Resolution) - 1;
+
+                        if ( thingjsLEDCChannelFades[mode][channel].Inverse == 0 ){
+                            if ( duty != 0 ) ledc_set_duty_and_update(mode,channel,0,0);
+                          }
+                        else {
+                            if ( duty != maxDuty ) ledc_set_duty_and_update(mode, channel, maxDuty, 0);
+                        }
+
+                        break;
+
+                    case thingjsLEDCChannelModeOn:
+                        //_ledc_setDutyToChannel(channel, hwConfig.channels[channel].Duty);
+                        break;
+
+                    case thingjsLEDCChannelModeFadeRun:
+                        duty = thingjsLEDCCalculateFadeValue(
+                                thingjsLEDCChannelFades[mode][channel].DutyStart,
+                                thingjsLEDCChannelFades[mode][channel].DutyStop,
+                                thingjsLEDCChannelFades[mode][channel].FadeTimeMs,
+                                thingjsLEDCChannelFades[mode][channel].CurrentTimeMs);
+
+                        thingjsLEDCChannelFades[mode][channel].CurrentTimeMs += 50;
+
+                        if (duty == ledc_get_duty(mode,channel) ) break;
+
+                        if ( thingjsLEDCChannelFades[mode][channel].Inverse == 0 )
+                            ledc_set_duty(mode, channel, duty);
+                            //ledc_set_duty_and_update(mode,channel,duty,0);
+                        else
+                            ledc_set_duty(mode, channel, (1 << thingjsLEDCChannelFades[mode][channel].Resolution) - 1 - duty);
+                            //ledc_set_duty_and_update(mode, channel, (1 << thingjsLEDCChannelFades[mode][channel].Resolution) - 1 - duty, 0);
+
+                        ledc_update_duty(mode,channel);
+
+                        if (thingjsLEDCChannelFades[mode][channel].CurrentTimeMs >= thingjsLEDCChannelFades[mode][channel].FadeTimeMs)
+                            thingjsLEDCChannelFades[mode][channel].Mode = thingjsLEDCChannelModeOn;
+                        break;
+                }
+
+            }
+        }
+        vTaskDelay( 50 / portTICK_PERIOD_MS );
+    }
+}
+
+void thingjsLEDCControlTaskInit(void)
+{
+    if (thingjsLEDCtaskHandle == NULL) {
+        xTaskCreatePinnedToCore(thingjsLEDCControlTask, "LEDC", 2000, NULL, 5, &thingjsLEDCtaskHandle, 0);
+    }
+}
 
 static void thingjsLEDCSetFadeTimeAndStart(struct mjs *mjs) {
     ESP_LOGD(TAG_LEDC, "START FADE");
@@ -61,9 +242,11 @@ static void thingjsLEDCSetFadeTimeAndStart(struct mjs *mjs) {
     const unsigned long fade_ms = mjs_get_int32(mjs, arg1);
 
     ESP_LOGD(TAG_LEDC, "APPLY FADE speed=%d, channel=%d, target=%d, fade_ms=%lu", speed_mode, channel, target_duty, fade_ms);
-    const esp_err_t result = fade_ms != 0
-                            ? ledc_set_fade_time_and_start(speed_mode, channel, target_duty, fade_ms, LEDC_FADE_NO_WAIT)
-                            : ledc_set_duty_and_update(speed_mode, channel, target_duty, 0);
+//    const esp_err_t result = fade_ms != 0
+//                            ? ledc_set_fade_time_and_start(speed_mode, channel, target_duty, fade_ms, LEDC_FADE_NO_WAIT)
+//                            : ledc_set_duty_and_update(speed_mode, channel, target_duty, 0);
+
+    esp_err_t result = thingjsLEDCSetFadeWithTime(speed_mode,channel,target_duty,fade_ms);
 
     if (ESP_OK != result) {
         mjs_set_errorf(mjs, MJS_INTERNAL_ERROR, "%s: Can not start fade function channel=[%d] speed_mode=[%d] target_duty=[%d] fade_ms=[%lu]",
@@ -126,12 +309,13 @@ static void thingjsLEDCReconfigChannel(struct mjs *mjs) {
     ledc_channel.speed_mode = LEDC_HIGH_SPEED_MODE;
     ledc_channel.duty       = inverse ? (1 << resolution) - 1 : 0;
 
-    ESP_LOGD(TAG_LEDC, "BEFORE RECONFIG CHANNEL");
-    gpio_set_direction(ledc_channel.gpio_num, GPIO_MODE_OUTPUT);
     esp_err_t result = ledc_channel_config(&ledc_channel);
-    ESP_LOGD(TAG_LEDC, "AFTER RECONFIG CHANNEL");
 
     if(ESP_OK == result) {
+        thingjsLEDCChannelFades[LEDC_HIGH_SPEED_MODE][ledc_channel.channel].Resolution = resolution;
+        thingjsLEDCChannelFades[LEDC_HIGH_SPEED_MODE][ledc_channel.channel].Inverse = inverse;
+        thingjsLEDCChannelFades[LEDC_HIGH_SPEED_MODE][ledc_channel.channel].Mode = thingjsLEDCChannelModeOff;
+
         stdi_setProtectedProperty(mjs, this_obj, DEF_STR_INVERSE, mjs_mk_boolean(mjs, inverse));
         stdi_setProtectedProperty(mjs, this_obj, DEF_STR_DUTY, mjs_mk_number(mjs, duty));
     } else {
@@ -250,7 +434,8 @@ mjs_val_t thingjsLEDCConstructor(struct mjs *mjs, cJSON *params) {
 }
 
 void thingjsLEDCRegister(void) {
-    ledc_fade_func_install(0);
+
+    thingjsLEDCControlTaskInit();
 
     static int thingjs_ledc_cases[] = DEF_CASES(
             DEF_CASE(
