@@ -142,6 +142,7 @@ static void thingjsSmartLEDDemon(void *data) {
 static void thingjsSmartLEDSubscribe(void) {
     if(!smartLED_subscribers) {
         ledc_fade_func_install(0);
+        smartLED_demon_input = xQueueCreate(5,sizeof(struct st_smartled_action));
         xTaskCreatePinnedToCore(
                 &thingjsSmartLEDDemon,
                 "SmartLED",
@@ -163,6 +164,7 @@ static void thingjsSmartLEDUnsubscribe(void) {
 
     if(smartLED_subscribers == 1) {
         vTaskDelete(smartLED_demon_handle);
+        vQueueDelete(smartLED_demon_input);
         ledc_fade_func_uninstall(0);
     }
 
