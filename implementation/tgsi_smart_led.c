@@ -95,7 +95,7 @@ static uint32_t thingjsLEDCCalculateFadeValue(
 //Background demon of SmartLED
 static void thingjsSmartLEDDemon(void *data) {
     static struct st_smartled_channel_state channels[MAX_CONTROLLER][MAX_CHANNELS] = {0};
-    const TickType_t xLastWakeTime = xTaskGetTickCount();
+    TickType_t xLastWakeTime = xTaskGetTickCount();
     while(1) {
         struct st_smartled_action q_message;
         if (xQueueReceive(smartLED_demon_input, &q_message, ( TickType_t ) 0)) {
@@ -155,6 +155,8 @@ static void thingjsSmartLEDSubscribe(void) {
     ++smartLED_subscribers;
 }
 
+/*
+ * todo will uncomment when need it
 static void thingjsSmartLEDUnsubscribe(void) {
     if(!smartLED_subscribers)
         return;
@@ -166,6 +168,7 @@ static void thingjsSmartLEDUnsubscribe(void) {
 
     --smartLED_subscribers;
 }
+ */
 
 static void thingjsSmartLEDSetFadeTimeAndStart(struct mjs *mjs) {
     ESP_LOGD(TAG_SMARTLED, "START FADE");
@@ -239,7 +242,6 @@ static void thingjsSmartLEDReconfigChannel(struct mjs *mjs) {
 
     //Get driver/timer
     const mjs_val_t mjs_driver = mjs_get(mjs, this_obj, DEF_STR_DRIVER, ~0);
-    const mjs_val_t mjs_controller = mjs_get(mjs, mjs_driver, DEF_STR_CONTROLLER, ~0);
     const mjs_val_t resolution = mjs_get_int32(mjs, mjs_get(mjs, mjs_driver, DEF_STR_RESOLUTION, ~0));
     //Get channel
     ledc_channel.speed_mode  = resControllerToSys(
