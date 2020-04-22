@@ -23,7 +23,7 @@ const char TAG_SMARTLED[] = "SmartLED";
 
 const char DEF_STR_FREQUENCY[]      = "frequency";
 const char DEF_STR_RESOLUTION[]     = "resolution";
-const char DEF_STR_SPEED_MODE[]     = "speed_mode";
+const char DEF_STR_CONTROLLER[]     = "controller";
 const char DEF_STR_TIMER[]          = "timer";
 const char DEF_STR_CHANNEL[]        = "channel";
 const char DEF_STR_CHANNELS[]       = "channels";
@@ -36,9 +36,10 @@ const char DEF_STR_FADE[]           = "fade";
 
 #define SMARTLED_CONFIG_DEFAULT_FREQUENCY   2440
 #define SMARTLED_CONFIG_DEFAULT_RESOLUTION  15
+#define SMARTLED_CONFIG_DEFAULT_TIMER       LEDC_TIMER_0
 
 #define MAX_CHANNELS    8
-#define MAX_MODE        2
+#define MAX_CONTROLLER  2
 
 #define FADE_DEMON_DELAY_MS    50
 
@@ -48,7 +49,7 @@ typedef enum {
 
 struct st_smartled_action {
     smartled_action action;
-    uint32_t mode;      //Mode 0..(MAX_MODE - 1)
+    uint32_t controller;//Mode 0..(MAX_CONTROLLER - 1)
     uint32_t channel;   //Channel 0..(MAX_CHANNELS - 1)
     uint32_t target;    //Target duty
     uint32_t fade;      //Exposition
@@ -67,16 +68,25 @@ static int smartLED_subscribers = 0;
 static TaskHandle_t smartLED_demon_handle = 0;
 static QueueHandle_t smartLED_demon_input = 0;
 
+//Convert resource index controller to system index
+inline int resControllerToSys(int controller){
+    switch(controller) {
+        case RES_LEDC_1:
+            return LEDC_LOW_SPEED_MODE;
+        case RES_LEDC_0:
+        default:
+            return LEDC_HIGH_SPEED_MODE;
+    }
+}
+
 static uint32_t thingjsLEDCCalculateFadeValue(
         uint32_t dutyStart, uint32_t dutyStop, uint32_t fadeTimeMs, uint32_t fadeTimeCurrent) {
-    uint32_t dutyDiff = 0;
-    uint32_t dutyCurrent = 0;
 
     if ((0 == fadeTimeMs) || (fadeTimeCurrent >= fadeTimeMs) || (dutyStart == dutyStop))
         return dutyStop;
 
-    dutyDiff = abs(dutyStart - dutyStop);
-    dutyCurrent = dutyStart + (dutyStart > dutyStop ? -1 : 1) *
+    uint32_t dutyDiff = abs(dutyStart - dutyStop);
+    uint32_t dutyCurrent = dutyStart + (dutyStart > dutyStop ? -1 : 1) *
             (uint32_t)((((((uint64_t) fadeTimeCurrent) << 10) * (uint64_t) dutyDiff) / (uint64_t) fadeTimeMs) >> 10);
 
     return dutyCurrent;
@@ -84,26 +94,27 @@ static uint32_t thingjsLEDCCalculateFadeValue(
 
 //Background demon of SmartLED
 static void thingjsSmartLEDDemon(void *data) {
-    static struct st_smartled_channel_state channels[MAX_MODE][MAX_CHANNELS] = {0};
+    static struct st_smartled_channel_state channels[MAX_CONTROLLER][MAX_CHANNELS] = {0};
+    const TickType_t xLastWakeTime = xTaskGetTickCount();
     while(1) {
         struct st_smartled_action q_message;
         if (xQueueReceive(smartLED_demon_input, &q_message, ( TickType_t ) 0)) {
             switch(q_message.action) {
                 case slac_go:
-                    if((q_message.mode) < MAX_MODE && (q_message.channel < MAX_CHANNELS)) {
-                        struct st_smartled_channel_state *channel = &channels[q_message.mode][q_message.channel];
+                    if((q_message.controller) < MAX_CONTROLLER && (q_message.channel < MAX_CHANNELS)) {
+                        struct st_smartled_channel_state *channel = &channels[q_message.controller][q_message.channel];
                         channel->current_time = 0;
                         channel->fade = q_message.fade;
                         channel->duty_target = q_message.target;
-                        channel->duty_start = ledc_get_duty(q_message.mode, q_message.channel);
+                        channel->duty_start = ledc_get_duty(q_message.controller, q_message.channel);
                     }
                     break;
             }
         }
 
-        for (int mode_i = 0; mode_i < MAX_MODE; ++mode_i) {
-            for (int channel_i = 0; channel_i < MAX_MODE; ++channel_i) {
-                struct st_smartled_channel_state *channel = &channels[q_message.mode][q_message.channel];
+        for (int controller_i = 0; controller_i < MAX_CONTROLLER; ++controller_i) {
+            for (int channel_i = 0; channel_i < MAX_CHANNELS; ++channel_i) {
+                struct st_smartled_channel_state *channel = &channels[controller_i][channel_i];
 
                 if(channel->current_time >= channel->fade)
                     continue;
@@ -115,16 +126,16 @@ static void thingjsSmartLEDDemon(void *data) {
                             channel->current_time
                         );
 
-                if(target_duty != ledc_get_duty(mode_i, channel_i)) {
-                    ledc_set_duty(mode_i, channel_i, target_duty);
-                    ledc_update_duty(mode_i, channel_i);
+                if(target_duty != ledc_get_duty(controller_i, channel_i)) {
+                    ledc_set_duty(controller_i, channel_i, target_duty);
+                    ledc_update_duty(controller_i, channel_i);
                 }
 
                 channel->current_time += FADE_DEMON_DELAY_MS;
             }
         }
 
-        vTaskDelay(FADE_DEMON_DELAY_MS / portTICK_PERIOD_MS);
+        vTaskDelayUntil( &xLastWakeTime, FADE_DEMON_DELAY_MS);
     }
 }
 
@@ -134,7 +145,7 @@ static void thingjsSmartLEDSubscribe(void) {
         xTaskCreatePinnedToCore(
                 &thingjsSmartLEDDemon,
                 "SmartLED",
-                3000,
+                2000,
                 NULL,
                 5,
                 &smartLED_demon_handle,
@@ -181,17 +192,19 @@ static void thingjsSmartLEDSetFadeTimeAndStart(struct mjs *mjs) {
             //Action for daemon
             .action = slac_go,
             //Get speed mode of the driver
-            .mode = mjs_get_int32(mjs, mjs_get(mjs, mjs_driver, DEF_STR_SPEED_MODE, ~0)),
+            .controller = resControllerToSys(
+                    mjs_get_int32(mjs, mjs_get(mjs, mjs_driver, DEF_STR_CONTROLLER, ~0))
+                    ),
             //Get current the channel
             .channel = mjs_get_int32(mjs, mjs_get(mjs, this_obj, DEF_STR_CHANNEL, ~0)),
             //Exposition
-            .fade = mjs_get_int32(mjs, arg1),
+            .fade = (uint32_t)mjs_get_int32(mjs, arg1),
             //Target duty
             .target = (uint32_t)mjs_get_int32(mjs, arg0) & 0xFFFF
     };
 
-    ESP_LOGD(TAG_SMARTLED, "APPLY FADE speed=%d, channel=%d, target=%d, fade_ms=%d",
-             q_message.mode, q_message.channel, q_message.target, q_message.fade);
+    ESP_LOGD(TAG_SMARTLED, "APPLY FADE controller=%d, channel=%d, target=%d, fade_ms=%d",
+             q_message.controller, q_message.channel, q_message.target, q_message.fade);
 
     xQueueSend(smartLED_demon_input, &q_message, ( TickType_t ) (FADE_DEMON_DELAY_MS * 2));
 
@@ -226,27 +239,15 @@ static void thingjsSmartLEDReconfigChannel(struct mjs *mjs) {
 
     //Get driver/timer
     const mjs_val_t mjs_driver = mjs_get(mjs, this_obj, DEF_STR_DRIVER, ~0);
-    const mjs_val_t mjs_timer = mjs_get(mjs, mjs_driver, DEF_STR_TIMER, ~0);
+    const mjs_val_t mjs_controller = mjs_get(mjs, mjs_driver, DEF_STR_CONTROLLER, ~0);
     const mjs_val_t resolution = mjs_get_int32(mjs, mjs_get(mjs, mjs_driver, DEF_STR_RESOLUTION, ~0));
-    const int timer = mjs_get_int32(mjs, mjs_timer);
-
-    switch(timer) {
-        case RES_LEDC_0:
-            ledc_channel.timer_sel  = LEDC_TIMER_0;
-            break;
-        case RES_LEDC_1:
-            ledc_channel.timer_sel  = LEDC_TIMER_1;
-            break;
-        default:
-            mjs_set_errorf(mjs, MJS_INTERNAL_ERROR, "%s: Incorrect reconfig() params", TAG_SMARTLED);
-            mjs_return(mjs, MJS_INTERNAL_ERROR);
-            return;
-    }
-
     //Get channel
+    ledc_channel.speed_mode  = resControllerToSys(
+                mjs_get_int32(mjs, mjs_get(mjs, mjs_driver, DEF_STR_CONTROLLER, ~0))
+            );
     ledc_channel.channel    = mjs_get_int32(mjs, mjs_get(mjs, this_obj, DEF_STR_CHANNEL, ~0));
     ledc_channel.gpio_num   = mjs_get_int32(mjs, mjs_get(mjs, this_obj, DEF_STR_GPIO, ~0));
-    ledc_channel.speed_mode = LEDC_HIGH_SPEED_MODE;
+    ledc_channel.timer_sel  = mjs_get_int32(mjs, mjs_get(mjs, this_obj, DEF_STR_TIMER, ~0));
     ledc_channel.duty       = inverse ? (1 << resolution) - 1 : 0;
 
     ESP_LOGD(TAG_SMARTLED, "BEFORE RECONFIG CHANNEL");
@@ -274,7 +275,7 @@ static void thingjsSmartLEDReconfigDriver(struct mjs *mjs) {
     //Get current frequency
     uint32_t frequency = mjs_get_int32(mjs, mjs_get(mjs, this_obj, DEF_STR_FREQUENCY, ~0));
     uint32_t resolution = mjs_get_int32(mjs, mjs_get(mjs, this_obj, DEF_STR_RESOLUTION, ~0));
-    uint32_t speed_mode = mjs_get_int32(mjs, mjs_get(mjs, this_obj, DEF_STR_SPEED_MODE, ~0));
+    uint32_t controller = mjs_get_int32(mjs, mjs_get(mjs, this_obj, DEF_STR_CONTROLLER, ~0));
     uint32_t timer = mjs_get_int32(mjs, mjs_get(mjs, this_obj, DEF_STR_TIMER, ~0));
 
     //Get function params
@@ -292,20 +293,11 @@ static void thingjsSmartLEDReconfigDriver(struct mjs *mjs) {
     }
 
     ledc_timer_config_t ledc_timer = {
-            .duty_resolution    = resolution, 			// resolution of PWM duty
-            .freq_hz            = frequency,            // frequency of PWM signal
-            .speed_mode         = speed_mode 	        // timer mode
+            .duty_resolution    = resolution, 			            // resolution of PWM duty
+            .freq_hz            = frequency,                        // frequency of PWM signal
+            .timer_num          = timer, 	                        // timer
+            .speed_mode         = resControllerToSys(controller)    // Controller
     };
-
-    //Set timer index
-    switch(timer) {
-        case RES_LEDC_0:
-            ledc_timer.timer_num = LEDC_TIMER_0;
-            break;
-        case RES_LEDC_1:
-            ledc_timer.timer_num = LEDC_TIMER_1;
-            break;
-    }
 
     // Set configuration of timer0 for high speed channels
     esp_err_t result = ledc_timer_config(&ledc_timer);
@@ -338,10 +330,14 @@ mjs_val_t thingjsSmartLEDConstructor(struct mjs *mjs, cJSON *params) {
     mjs_val_t interface = mjs_mk_object(mjs);
 
     //Add protected property to interface
-    stdi_setProtectedProperty(mjs, interface, DEF_STR_SPEED_MODE, mjs_mk_number(mjs, LEDC_HIGH_SPEED_MODE));
-    stdi_setProtectedProperty(mjs, interface, DEF_STR_TIMER, mjs_mk_number(mjs, cJSON_GetArrayItem(params, 0)->valueint));
-    stdi_setProtectedProperty(mjs, interface, DEF_STR_FREQUENCY, mjs_mk_number(mjs, SMARTLED_CONFIG_DEFAULT_FREQUENCY));
-    stdi_setProtectedProperty(mjs, interface, DEF_STR_RESOLUTION, mjs_mk_number(mjs, SMARTLED_CONFIG_DEFAULT_RESOLUTION));
+    stdi_setProtectedProperty(mjs, interface, DEF_STR_CONTROLLER,
+            mjs_mk_number(mjs, cJSON_GetArrayItem(params, 0)->valueint));
+    stdi_setProtectedProperty(mjs, interface, DEF_STR_TIMER,
+            mjs_mk_number(mjs, SMARTLED_CONFIG_DEFAULT_TIMER));
+    stdi_setProtectedProperty(mjs, interface, DEF_STR_FREQUENCY,
+            mjs_mk_number(mjs, SMARTLED_CONFIG_DEFAULT_FREQUENCY));
+    stdi_setProtectedProperty(mjs, interface, DEF_STR_RESOLUTION,
+            mjs_mk_number(mjs, SMARTLED_CONFIG_DEFAULT_RESOLUTION));
     stdi_setProtectedProperty(mjs, interface, DEF_STR_RECONFIG,
             mjs_mk_foreign_func(mjs, (mjs_func_ptr_t) thingjsSmartLEDReconfigDriver));
 
