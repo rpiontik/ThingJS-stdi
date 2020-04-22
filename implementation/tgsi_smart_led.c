@@ -176,13 +176,17 @@ static void thingjsSmartLEDSetFadeTimeAndStart(struct mjs *mjs) {
     //Get driver of the channel
     const mjs_val_t mjs_driver = mjs_get(mjs, this_obj, DEF_STR_DRIVER, ~0);
 
+    //Make request to fade daemon
     struct st_smartled_action q_message = {
+            //Action for daemon
             .action = slac_go,
             //Get speed mode of the driver
             .mode = mjs_get_int32(mjs, mjs_get(mjs, mjs_driver, DEF_STR_SPEED_MODE, ~0)),
             //Get current the channel
             .channel = mjs_get_int32(mjs, mjs_get(mjs, this_obj, DEF_STR_CHANNEL, ~0)),
+            //Exposition
             .fade = mjs_get_int32(mjs, arg1),
+            //Target duty
             .target = (uint32_t)mjs_get_int32(mjs, arg0) & 0xFFFF
     };
 
@@ -316,8 +320,6 @@ static void thingjsSmartLEDReconfigDriver(struct mjs *mjs) {
         return;
     }
 
-    thingjsSmartLEDUnsubscribe();
-
     mjs_return(mjs, MJS_OK);
     ESP_LOGD(TAG_SMARTLED, "END RECONFIG DRIVER");
 }
@@ -329,6 +331,7 @@ mjs_val_t thingjsSmartLEDConstructor(struct mjs *mjs, cJSON *params) {
         return MJS_INTERNAL_ERROR;
     }
 
+    //Subscribe on fade daemon
     thingjsSmartLEDSubscribe();
 
     //Create mJS interface object
@@ -344,7 +347,7 @@ mjs_val_t thingjsSmartLEDConstructor(struct mjs *mjs, cJSON *params) {
 
     //Make the channels array
     mjs_val_t channels = mjs_mk_array(mjs);
-    for(int i = 1; i < cJSON_GetArraySize(params); i++) {
+    for(int i = 1; i < cJSON_GetArraySize(params) && i <= MAX_CHANNELS; i++) {
         //Create channel object
         mjs_val_t channel = mjs_mk_object(mjs);
         //Get GPIO of channel
