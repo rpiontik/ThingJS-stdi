@@ -36,7 +36,8 @@ const char DEF_STR_FADE[]           = "fade";
 
 #define SMARTLED_CONFIG_DEFAULT_FREQUENCY   2440
 #define SMARTLED_CONFIG_DEFAULT_RESOLUTION  15
-#define SMARTLED_CONFIG_DEFAULT_TIMER       LEDC_TIMER_0
+#define SMARTLED_CONFIG_DEFAULT_TIMER       0
+
 
 #define MAX_CHANNELS    8
 #define MAX_CONTROLLER  2
@@ -251,13 +252,13 @@ static void thingjsSmartLEDReconfigChannel(struct mjs *mjs) {
             );
     ledc_channel.channel    = mjs_get_int32(mjs, mjs_get(mjs, this_obj, DEF_STR_CHANNEL, ~0));
     ledc_channel.gpio_num   = mjs_get_int32(mjs, mjs_get(mjs, this_obj, DEF_STR_GPIO, ~0));
-    ledc_channel.timer_sel  = mjs_get_int32(mjs, mjs_get(mjs, this_obj, DEF_STR_TIMER, ~0));
+    ledc_channel.timer_sel  = mjs_get_int32(mjs, mjs_get(mjs, mjs_driver, DEF_STR_TIMER, ~0));
     ledc_channel.duty       = inverse ? (1 << resolution) - 1 : 0;
 
-    ESP_LOGD(TAG_SMARTLED, "BEFORE RECONFIG CHANNEL");
+//    ESP_LOGD(TAG_SMARTLED, "BEFORE RECONFIG CHANNEL");
     gpio_set_direction(ledc_channel.gpio_num, GPIO_MODE_OUTPUT);
     esp_err_t result = ledc_channel_config(&ledc_channel);
-    ESP_LOGD(TAG_SMARTLED, "AFTER RECONFIG CHANNEL");
+//    ESP_LOGD(TAG_SMARTLED, "AFTER RECONFIG CHANNEL");
 
     if(ESP_OK == result) {
         stdi_setProtectedProperty(mjs, this_obj, DEF_STR_INVERSE, mjs_mk_boolean(mjs, inverse));
@@ -381,36 +382,36 @@ void thingjsSmartLEDRegister(void) {
             DEF_CASE(
                     DEF_ENUM(RES_LEDC_0, RES_LEDC_1),
                     DEF_ENUM(
-                            GPIO0, GPIO1, GPIO2, GPIO3, GPIO4, GPIO5, GPIO12, GPIO13, GPIO14, GPIO15, GPIO16, GPIO17, GPIO18,
-                            GPIO19, GPIO21, GPIO22, GPIO23, GPIO25, GPIO26, GPIO27, GPIO32, GPIO33
+                            GPIO0, GPIO32, GPIO2, GPIO33, GPIO4, GPIO5, GPIO12, GPIO13, GPIO14, GPIO15, GPIO16, GPIO17, GPIO18,
+                            GPIO19, GPIO21, GPIO22, GPIO23, GPIO25, GPIO26, GPIO27, GPIO1, GPIO3
                             )
                     ,DEF_ENUM(
-                            GPIO0, GPIO1, GPIO2, GPIO3, GPIO4, GPIO5, GPIO12, GPIO13, GPIO14, GPIO15, GPIO16, GPIO17, GPIO18,
-                            GPIO19, GPIO21, GPIO22, GPIO23, GPIO25, GPIO26, GPIO27, GPIO32, GPIO33
+                            GPIO0, GPIO32, GPIO2, GPIO33, GPIO4, GPIO5, GPIO12, GPIO13, GPIO14, GPIO15, GPIO16, GPIO17, GPIO18,
+                            GPIO19, GPIO21, GPIO22, GPIO23, GPIO25, GPIO26, GPIO27, GPIO1, GPIO3
                     )
                     ,DEF_ENUM(
-                            GPIO0, GPIO1, GPIO2, GPIO3, GPIO4, GPIO5, GPIO12, GPIO13, GPIO14, GPIO15, GPIO16, GPIO17, GPIO18,
-                            GPIO19, GPIO21, GPIO22, GPIO23, GPIO25, GPIO26, GPIO27, GPIO32, GPIO33
+                            GPIO0, GPIO32, GPIO2, GPIO33, GPIO4, GPIO5, GPIO12, GPIO13, GPIO14, GPIO15, GPIO16, GPIO17, GPIO18,
+                            GPIO19, GPIO21, GPIO22, GPIO23, GPIO25, GPIO26, GPIO27, GPIO1, GPIO3
                     )
                     ,DEF_ENUM(
-                            GPIO0, GPIO1, GPIO2, GPIO3, GPIO4, GPIO5, GPIO12, GPIO13, GPIO14, GPIO15, GPIO16, GPIO17, GPIO18,
-                            GPIO19, GPIO21, GPIO22, GPIO23, GPIO25, GPIO26, GPIO27, GPIO32, GPIO33
+                            GPIO0, GPIO32, GPIO2, GPIO33, GPIO4, GPIO5, GPIO12, GPIO13, GPIO14, GPIO15, GPIO16, GPIO17, GPIO18,
+                            GPIO19, GPIO21, GPIO22, GPIO23, GPIO25, GPIO26, GPIO27, GPIO1, GPIO3
                     )
                     ,DEF_ENUM(
-                            GPIO0, GPIO1, GPIO2, GPIO3, GPIO4, GPIO5, GPIO12, GPIO13, GPIO14, GPIO15, GPIO16, GPIO17, GPIO18,
-                            GPIO19, GPIO21, GPIO22, GPIO23, GPIO25, GPIO26, GPIO27, GPIO32, GPIO33
+                            GPIO0, GPIO32, GPIO2, GPIO33, GPIO4, GPIO5, GPIO12, GPIO13, GPIO14, GPIO15, GPIO16, GPIO17, GPIO18,
+                            GPIO19, GPIO21, GPIO22, GPIO23, GPIO25, GPIO26, GPIO27, GPIO1, GPIO3
                     )
                     ,DEF_ENUM(
-                            GPIO0, GPIO1, GPIO2, GPIO3, GPIO4, GPIO5, GPIO12, GPIO13, GPIO14, GPIO15, GPIO16, GPIO17, GPIO18,
-                            GPIO19, GPIO21, GPIO22, GPIO23, GPIO25, GPIO26, GPIO27, GPIO32, GPIO33
+                            GPIO0, GPIO32, GPIO2, GPIO33, GPIO4, GPIO5, GPIO12, GPIO13, GPIO14, GPIO15, GPIO16, GPIO17, GPIO18,
+                            GPIO19, GPIO21, GPIO22, GPIO23, GPIO25, GPIO26, GPIO27, GPIO1, GPIO3
                     )
                     ,DEF_ENUM(
-                            GPIO0, GPIO1, GPIO2, GPIO3, GPIO4, GPIO5, GPIO12, GPIO13, GPIO14, GPIO15, GPIO16, GPIO17, GPIO18,
-                            GPIO19, GPIO21, GPIO22, GPIO23, GPIO25, GPIO26, GPIO27, GPIO32, GPIO33
+                            GPIO0, GPIO32, GPIO2, GPIO33, GPIO4, GPIO5, GPIO12, GPIO13, GPIO14, GPIO15, GPIO16, GPIO17, GPIO18,
+                            GPIO19, GPIO21, GPIO22, GPIO23, GPIO25, GPIO26, GPIO27, GPIO1, GPIO3
                     )
                     ,DEF_ENUM(
-                            GPIO0, GPIO1, GPIO2, GPIO3, GPIO4, GPIO5, GPIO12, GPIO13, GPIO14, GPIO15, GPIO16, GPIO17, GPIO18,
-                            GPIO19, GPIO21, GPIO22, GPIO23, GPIO25, GPIO26, GPIO27, GPIO32, GPIO33
+                            GPIO0, GPIO32, GPIO2, GPIO33, GPIO4, GPIO5, GPIO12, GPIO13, GPIO14, GPIO15, GPIO16, GPIO17, GPIO18,
+                            GPIO19, GPIO21, GPIO22, GPIO23, GPIO25, GPIO26, GPIO27, GPIO1, GPIO3
                     )
             )
     );
