@@ -37,6 +37,7 @@ const char DEF_STR_FADE[]           = "fade";
 #define SMARTLED_CONFIG_DEFAULT_FREQUENCY   2440
 #define SMARTLED_CONFIG_DEFAULT_RESOLUTION  15
 #define SMARTLED_CONFIG_DEFAULT_TIMER       0
+#define MAX_QUEUE_DEPTH                     16
 
 
 #define MAX_CHANNELS    8
@@ -99,7 +100,7 @@ static void thingjsSmartLEDDemon(void *data) {
     TickType_t xLastWakeTime = xTaskGetTickCount();
     while(1) {
         struct st_smartled_action q_message;
-        if (xQueueReceive(smartLED_demon_input, &q_message, ( TickType_t ) 0)) {
+        while (xQueueReceive(smartLED_demon_input, &q_message, ( TickType_t ) 0)) {
             switch(q_message.action) {
                 case slac_go:
                     if((q_message.controller) < MAX_CONTROLLER && (q_message.channel < MAX_CHANNELS)) {
@@ -143,7 +144,7 @@ static void thingjsSmartLEDDemon(void *data) {
 static void thingjsSmartLEDSubscribe(void) {
     if(!smartLED_subscribers) {
         ledc_fade_func_install(0);
-        smartLED_demon_input = xQueueCreate(5,sizeof(struct st_smartled_action));
+        smartLED_demon_input = xQueueCreate(MAX_QUEUE_DEPTH,sizeof(struct st_smartled_action));
         xTaskCreatePinnedToCore(
                 &thingjsSmartLEDDemon,
                 "SmartLED",
