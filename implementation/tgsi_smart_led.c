@@ -80,6 +80,29 @@ inline int resControllerToSys(int controller){
     }
 }
 
+void hwInitPCBFenixV1I1(void)
+{
+    gpio_config_t io_conf;
+    //disable interrupt
+    io_conf.intr_type = GPIO_PIN_INTR_DISABLE;
+    //set as output mode
+    io_conf.mode = GPIO_MODE_OUTPUT;
+    //bit mask of the pins that you want to set
+    io_conf.pin_bit_mask = ((1ULL<<22)|(1ULL<<18)|(1ULL<<23)|(1ULL<<19)|(1ULL<<21));
+    //disable pull-down mode
+    io_conf.pull_down_en = 0;
+    //disable pull-up mode
+    io_conf.pull_up_en = 0;
+    //configure GPIO with the given settings
+    gpio_config(&io_conf);
+
+    gpio_set_level(22,1); //Power on for DRV
+    gpio_set_level(18,0); //LED channel off
+    gpio_set_level(23,0); //LED channel off
+    gpio_set_level(21,0); //LED channel off
+    gpio_set_level(19,0); //LED channel off
+}
+
 static uint32_t thingjsLEDCCalculateFadeValue(
         uint32_t dutyStart, uint32_t dutyStop, uint32_t fadeTimeMs, uint32_t fadeTimeCurrent) {
 
@@ -144,6 +167,7 @@ static void thingjsSmartLEDSubscribe(void) {
     if(!smartLED_subscribers) {
         ledc_fade_func_install(0);
         smartLED_demon_input = xQueueCreate(5,sizeof(struct st_smartled_action));
+        hwInitPCBFenixV1I1();
         xTaskCreatePinnedToCore(
                 &thingjsSmartLEDDemon,
                 "SmartLED",
@@ -362,7 +386,7 @@ mjs_val_t thingjsSmartLEDConstructor(struct mjs *mjs, cJSON *params) {
         stdi_setProtectedProperty(mjs, channel, DEF_STR_CHANNEL, mjs_mk_number(mjs,  i - 1));
         stdi_setProtectedProperty(mjs, channel, DEF_STR_GPIO, mjs_mk_number(mjs,  json_gpio->valueint));
         stdi_setProtectedProperty(mjs, channel, DEF_STR_DUTY, mjs_mk_number(mjs, 0));
-        stdi_setProtectedProperty(mjs, channel, DEF_STR_INVERSE, mjs_mk_boolean(mjs, 1));
+        stdi_setProtectedProperty(mjs, channel, DEF_STR_INVERSE, mjs_mk_boolean(mjs, 0));
         //Bind functions
         stdi_setProtectedProperty(mjs, channel, DEF_STR_RECONFIG,
                 mjs_mk_foreign_func(mjs, (mjs_func_ptr_t) thingjsSmartLEDReconfigChannel));
@@ -382,35 +406,35 @@ void thingjsSmartLEDRegister(void) {
             DEF_CASE(
                     DEF_ENUM(RES_LEDC_0, RES_LEDC_1),
                     DEF_ENUM(
-                            GPIO0, GPIO32, GPIO2, GPIO33, GPIO4, GPIO5, GPIO12, GPIO13, GPIO14, GPIO15, GPIO16, GPIO17, GPIO18,
+                            GPIO32, GPIO0, GPIO2, GPIO33, GPIO4, GPIO5, GPIO12, GPIO13, GPIO14, GPIO15, GPIO16, GPIO17, GPIO18,
                             GPIO19, GPIO21, GPIO22, GPIO23, GPIO25, GPIO26, GPIO27, GPIO1, GPIO3
                             )
                     ,DEF_ENUM(
-                            GPIO0, GPIO32, GPIO2, GPIO33, GPIO4, GPIO5, GPIO12, GPIO13, GPIO14, GPIO15, GPIO16, GPIO17, GPIO18,
+                            GPIO33, GPIO32, GPIO2, GPIO0, GPIO4, GPIO5, GPIO12, GPIO13, GPIO14, GPIO15, GPIO16, GPIO17, GPIO18,
                             GPIO19, GPIO21, GPIO22, GPIO23, GPIO25, GPIO26, GPIO27, GPIO1, GPIO3
                     )
                     ,DEF_ENUM(
-                            GPIO0, GPIO32, GPIO2, GPIO33, GPIO4, GPIO5, GPIO12, GPIO13, GPIO14, GPIO15, GPIO16, GPIO17, GPIO18,
+                            GPIO26, GPIO32, GPIO2, GPIO33, GPIO4, GPIO5, GPIO12, GPIO13, GPIO14, GPIO15, GPIO16, GPIO17, GPIO18,
+                            GPIO19, GPIO21, GPIO22, GPIO23, GPIO25, GPIO0, GPIO27, GPIO1, GPIO3
+                    )
+                    ,DEF_ENUM(
+                            GPIO27, GPIO32, GPIO2, GPIO33, GPIO4, GPIO5, GPIO12, GPIO13, GPIO14, GPIO15, GPIO16, GPIO17, GPIO18,
+                            GPIO19, GPIO21, GPIO22, GPIO23, GPIO25, GPIO26, GPIO0, GPIO1, GPIO3
+                    )
+                    ,DEF_ENUM(
+                            GPIO14, GPIO32, GPIO2, GPIO33, GPIO4, GPIO5, GPIO12, GPIO13, GPIO0, GPIO15, GPIO16, GPIO17, GPIO18,
                             GPIO19, GPIO21, GPIO22, GPIO23, GPIO25, GPIO26, GPIO27, GPIO1, GPIO3
                     )
                     ,DEF_ENUM(
-                            GPIO0, GPIO32, GPIO2, GPIO33, GPIO4, GPIO5, GPIO12, GPIO13, GPIO14, GPIO15, GPIO16, GPIO17, GPIO18,
+                            GPIO12, GPIO32, GPIO2, GPIO33, GPIO4, GPIO5, GPIO0, GPIO13, GPIO14, GPIO15, GPIO16, GPIO17, GPIO18,
                             GPIO19, GPIO21, GPIO22, GPIO23, GPIO25, GPIO26, GPIO27, GPIO1, GPIO3
                     )
                     ,DEF_ENUM(
-                            GPIO0, GPIO32, GPIO2, GPIO33, GPIO4, GPIO5, GPIO12, GPIO13, GPIO14, GPIO15, GPIO16, GPIO17, GPIO18,
+                            GPIO13, GPIO32, GPIO2, GPIO33, GPIO4, GPIO5, GPIO12, GPIO0, GPIO14, GPIO15, GPIO16, GPIO17, GPIO18,
                             GPIO19, GPIO21, GPIO22, GPIO23, GPIO25, GPIO26, GPIO27, GPIO1, GPIO3
                     )
                     ,DEF_ENUM(
-                            GPIO0, GPIO32, GPIO2, GPIO33, GPIO4, GPIO5, GPIO12, GPIO13, GPIO14, GPIO15, GPIO16, GPIO17, GPIO18,
-                            GPIO19, GPIO21, GPIO22, GPIO23, GPIO25, GPIO26, GPIO27, GPIO1, GPIO3
-                    )
-                    ,DEF_ENUM(
-                            GPIO0, GPIO32, GPIO2, GPIO33, GPIO4, GPIO5, GPIO12, GPIO13, GPIO14, GPIO15, GPIO16, GPIO17, GPIO18,
-                            GPIO19, GPIO21, GPIO22, GPIO23, GPIO25, GPIO26, GPIO27, GPIO1, GPIO3
-                    )
-                    ,DEF_ENUM(
-                            GPIO0, GPIO32, GPIO2, GPIO33, GPIO4, GPIO5, GPIO12, GPIO13, GPIO14, GPIO15, GPIO16, GPIO17, GPIO18,
+                            GPIO4, GPIO32, GPIO2, GPIO33, GPIO0, GPIO5, GPIO12, GPIO13, GPIO14, GPIO15, GPIO16, GPIO17, GPIO18,
                             GPIO19, GPIO21, GPIO22, GPIO23, GPIO25, GPIO26, GPIO27, GPIO1, GPIO3
                     )
             )
