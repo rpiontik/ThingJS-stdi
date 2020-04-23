@@ -37,7 +37,7 @@ const char DEF_STR_FADE[]           = "fade";
 #define SMARTLED_CONFIG_DEFAULT_FREQUENCY   2440
 #define SMARTLED_CONFIG_DEFAULT_RESOLUTION  15
 #define SMARTLED_CONFIG_DEFAULT_TIMER       0
-#define MAX_QUEUE_DEPTH                     16
+#define MAX_QUEUE_DEPTH                     8
 
 
 #define MAX_CHANNELS    8
