@@ -21,12 +21,8 @@ const char TAG_CLOCK[] = INTERFACE_NAME;
 
 static void thingjsGetTime(struct mjs *mjs) {
     time_t now = {0};
-    if(currentTime(&now)) {
-        mjs_return(mjs, mjs_mk_number(mjs, now));
-    } else {
-        mjs_set_errorf(mjs, MJS_INTERNAL_ERROR, "%s: Error of set time", pcTaskGetTaskName(NULL));
-        mjs_return(mjs, MJS_INTERNAL_ERROR);
-    }
+    currentTime(&now);
+    mjs_return(mjs, mjs_mk_number(mjs, now));
 }
 
 static void thingjsSetTime(struct mjs *mjs) {
