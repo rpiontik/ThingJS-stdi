@@ -31,13 +31,7 @@ struct timer_params {
 
 void vm_timer_callback(TimerHandle_t xTimer) {
     struct timer_params *params = (struct timer_params *) pvTimerGetTimerID(xTimer);
-
     thingjsSyncCallMJSFunction(params->process, params->context, params->callback, params->params);
-
-    if (!params->is_interval) {
-        free(params);
-        xTimerDelete(xTimer, 0);
-    }
 }
 
 static void thingjsRunTimer(struct mjs *mjs, bool is_interval) {
@@ -75,7 +69,7 @@ static void thingjsRunTimer(struct mjs *mjs, bool is_interval) {
         } else {
             mjs_val_t timer_foreign = mjs_mk_foreign(mjs, timer_handle);
             mjs_array_push(mjs, jobs, timer_foreign);
-            mjs_return(mjs, mjs_mk_foreign(mjs, timer_handle));
+            mjs_return(mjs, timer_foreign);
         }
     } else {
         mjs_set_errorf(mjs, MJS_INTERNAL_ERROR, "%s/%s: Incorrect params of function setTimeout", app_name, TAG_TIMER);
@@ -98,37 +92,37 @@ static inline void thingjsClearTimer(struct mjs *mjs) {
     mjs_val_t jobs = mjs_get(mjs, this, SYS_PROP_JOBS, ~0); //Active timer's jobs
 
     if (mjs_is_foreign(foreign) && mjs_is_array(jobs) && mjs_is_object(this)) {
+        ESP_LOGD(TAG_TIMER, "Delete timer [%lu]", (unsigned long)mjs_get_ptr(mjs, foreign));
+
+        int timer_index = -1;
+
         //Remove timer from jobs
         for(long i = mjs_array_length(mjs, jobs) - 1; i >= 0; i--) {
             if(mjs_array_get(mjs, jobs, i) == foreign) {
-                mjs_array_del(mjs, jobs, i);
+                timer_index = i;
                 break;
             }
         }
+
+        ESP_LOGD(TAG_TIMER, "Timer index [%d]", timer_index);
+
         //Delete timer from system
-        if(xTimerDelete(mjs_get_ptr(mjs, foreign), 0) == pdPASS) {
+        if((timer_index >= 0) && (xTimerDelete(mjs_get_ptr(mjs, foreign), 0) == pdPASS)) {
+            mjs_array_del(mjs, jobs, timer_index);
+            ESP_LOGD(TAG_TIMER, "Deleted job [%d]", timer_index);
             mjs_return(mjs, MJS_OK);
         } else {
             mjs_set_errorf(mjs, MJS_INTERNAL_ERROR, "%s: Can not clear timer", TAG_TIMER);
             mjs_return(mjs, MJS_INTERNAL_ERROR);
         }
+
     } else {
         mjs_set_errorf(mjs, MJS_INTERNAL_ERROR, "%s: Incorrect internal params", TAG_TIMER);
         mjs_return(mjs, MJS_INTERNAL_ERROR);
     }
-
-    thingjsRunTimer(mjs, false);
 }
 
 mjs_val_t thingjsTimersConstructor(struct mjs *mjs, cJSON *params) {
-    //Validate preset params
-    //The params must have timer resource
-    if (!cJSON_IsNumber(params) || (params->valueint != RES_TIMER)) {
-        mjs_set_errorf(mjs, MJS_INTERNAL_ERROR, "%s: Incorrect params", TAG_TIMER);
-        mjs_return(mjs, MJS_INTERNAL_ERROR);
-        return MJS_UNDEFINED;
-    }
-
     //Create mjs object
     mjs_val_t interface = mjs_mk_object(mjs);
 
@@ -136,16 +130,19 @@ mjs_val_t thingjsTimersConstructor(struct mjs *mjs, cJSON *params) {
     stdi_setProtectedProperty(mjs, interface, SYS_PROP_JOBS, mjs_mk_array(mjs));
 
     //Bind functions
+    //Timeout
+    //todo NEED TO ADD DESCRIPTION REGARDING MANUAL FREE TIMER HANDLER
     stdi_setProtectedProperty(mjs, interface, "setTimeout",
             mjs_mk_foreign_func(mjs, (mjs_func_ptr_t) thingjsSetTimeout));
-    stdi_setProtectedProperty(mjs, interface, "setInterval",
-            mjs_mk_foreign_func(mjs, (mjs_func_ptr_t) thingjsSetInterval));
-    stdi_setProtectedProperty(mjs, interface, "setInterval",
-                              mjs_mk_foreign_func(mjs, (mjs_func_ptr_t) thingjsSetInterval));
-    stdi_setProtectedProperty(mjs, interface, "clearInterval",
-                              mjs_mk_foreign_func(mjs, (mjs_func_ptr_t) thingjsClearTimer));
     stdi_setProtectedProperty(mjs, interface, "clearTimeout",
                               mjs_mk_foreign_func(mjs, (mjs_func_ptr_t) thingjsClearTimer));
+
+    //Interval
+    stdi_setProtectedProperty(mjs, interface, "setInterval",
+            mjs_mk_foreign_func(mjs, (mjs_func_ptr_t) thingjsSetInterval));
+    stdi_setProtectedProperty(mjs, interface, "clearInterval",
+            mjs_mk_foreign_func(mjs, (mjs_func_ptr_t) thingjsClearTimer));
+
 
     //Return mJS interface object
     return interface;
@@ -165,7 +162,7 @@ void thingjsTimersDestructor(struct mjs * mjs, mjs_val_t subject) {
 }
 
 void thingjsTimersRegister(void) {
-    static int thingjs_timer_cases[] = DEF_CASES(DEF_CASE(RES_TIMER));
+    static int thingjs_timer_cases[] = DEF_CASES(DEF_CASE(RES_VIRTUAL));
 
 
     static const struct st_thingjs_interface_manifest interface = {

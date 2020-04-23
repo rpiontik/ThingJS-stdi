@@ -10,6 +10,7 @@
 
 #define NON				-1
 #define ENUM			-2 /* Enumerations of pins */
+#define NO_ANY   		-3 /* No any pin to use */
 
 #define DEF_CASES(...) {__VA_ARGS__, NON}
 #define DEF_CASE(...) __VA_ARGS__, NON

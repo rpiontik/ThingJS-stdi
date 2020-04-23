@@ -7,8 +7,14 @@
 
 #include "implementation/tgsi_bit_port.h"
 #include "implementation/tgsi_timer.h"
+#include "implementation/tgsi_clock.h"
+#include "implementation/tgsi_ds3231.h"
+#include "implementation/tgsi_smart_led.h"
 
 void thingjsSTDIRegister(void) {
     thingjsBitPortRegister();
     thingjsTimersRegister();
+    thingjsClockRegister();
+    thingjsDS3231Register();
+    thingjsSmartLEDRegister();
 }
