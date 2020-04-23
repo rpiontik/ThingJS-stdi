@@ -83,7 +83,7 @@ inline int resControllerToSys(int controller){
 static uint32_t thingjsLEDCCalculateFadeValue(
         uint32_t dutyStart, uint32_t dutyStop, uint32_t fadeTimeMs, uint32_t fadeTimeCurrent) {
 
-    if ((0 == fadeTimeMs) || (fadeTimeCurrent >= fadeTimeMs) || (dutyStart == dutyStop))
+    if ((FADE_DEMON_DELAY_MS > fadeTimeMs) || (fadeTimeCurrent >= fadeTimeMs) || (dutyStart == dutyStop))
         return dutyStop;
 
     uint32_t dutyDiff = abs(dutyStart - dutyStop);
@@ -105,7 +105,7 @@ static void thingjsSmartLEDDemon(void *data) {
                     if((q_message.controller) < MAX_CONTROLLER && (q_message.channel < MAX_CHANNELS)) {
                         struct st_smartled_channel_state *channel = &channels[q_message.controller][q_message.channel];
                         channel->current_time = 0;
-                        channel->fade = q_message.fade;
+                        channel->fade = q_message.fade + 1;
                         channel->duty_target = q_message.target;
                         channel->duty_start = ledc_get_duty(q_message.controller, q_message.channel);
                     }
@@ -117,7 +117,7 @@ static void thingjsSmartLEDDemon(void *data) {
             for (int channel_i = 0; channel_i < MAX_CHANNELS; ++channel_i) {
                 struct st_smartled_channel_state *channel = &channels[controller_i][channel_i];
 
-                if(channel->current_time > channel->fade)
+                if(channel->current_time >= channel->fade)
                     continue;
 
                 uint32_t target_duty = thingjsLEDCCalculateFadeValue(
