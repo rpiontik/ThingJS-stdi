@@ -171,7 +171,7 @@ static void thingjsSetTime(struct mjs *mjs) {
     }
 
     // Try to set time
-    if(rtcSetTime(&time) == ESP_OK) {
+    if(rtcSetTime(&now) == ESP_OK) {
         // Try to get real time from RTC module
         thingjsGetTime(mjs);
     } else {
