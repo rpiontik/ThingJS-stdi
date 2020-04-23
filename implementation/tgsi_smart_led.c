@@ -117,7 +117,7 @@ static void thingjsSmartLEDDemon(void *data) {
             for (int channel_i = 0; channel_i < MAX_CHANNELS; ++channel_i) {
                 struct st_smartled_channel_state *channel = &channels[controller_i][channel_i];
 
-                if(channel->current_time >= channel->fade)
+                if(channel->current_time > channel->fade)
                     continue;
 
                 uint32_t target_duty = thingjsLEDCCalculateFadeValue(
