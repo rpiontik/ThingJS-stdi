@@ -105,10 +105,15 @@ static void thingjsSmartLEDDemon(void *data) {
                 case slac_go:
                     if((q_message.controller) < MAX_CONTROLLER && (q_message.channel < MAX_CHANNELS)) {
                         struct st_smartled_channel_state *channel = &channels[q_message.controller][q_message.channel];
+                        channel->duty_start = thingjsLEDCCalculateFadeValue(
+                                channel->duty_start,
+                                channel->duty_target,
+                                channel->fade,
+                                channel->current_time
+                        );
                         channel->current_time = 0;
                         channel->fade = q_message.fade + 1;
                         channel->duty_target = q_message.target;
-                        channel->duty_start = ledc_get_duty(q_message.controller, q_message.channel);
                     }
                     break;
             }
