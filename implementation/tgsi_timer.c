@@ -29,9 +29,14 @@ struct timer_params {
     mjs_val_t params;       //mJS callback params
 };
 
+mjs_val_t vm_timer_mjs_callback(struct mjs * context, void * data) {
+    struct timer_params * params = data;
+    return mjs_apply(context, NULL, params->callback, MJS_UNDEFINED, 1, &params->params);
+}
+
 void vm_timer_callback(TimerHandle_t xTimer) {
     struct timer_params *params = (struct timer_params *) pvTimerGetTimerID(xTimer);
-    thingjsSyncCallMJSFunction(params->process, params->context, params->callback, params->params);
+    thingjsSendCallbackRequest(params->process, vm_timer_mjs_callback, params);
 }
 
 static void thingjsRunTimer(struct mjs *mjs, bool is_interval) {
