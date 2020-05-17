@@ -167,11 +167,11 @@ static void thingjsHTTPRequest(struct mjs *mjs) {
         http_content_type content_type = http_ct_text;
         mjs_val_t cfg_headers = mjs_get(mjs, config, HTTP_HEADERS, ~0);
         if (mjs_is_object(cfg_headers)) {
-            mjs_val_t cfg_header_value = MJS_UNDEFINED;
+            mjs_val_t cfg_header_iterator = MJS_UNDEFINED;
             mjs_val_t cfg_header_name = MJS_UNDEFINED;
 
-            while ((cfg_header_name = mjs_next(mjs, cfg_headers, &cfg_header_value)) != MJS_UNDEFINED) {
-
+            while ((cfg_header_name = mjs_next(mjs, cfg_headers, &cfg_header_iterator)) != MJS_UNDEFINED) {
+                mjs_val_t cfg_header_value = mjs_get_v(mjs, cfg_headers, cfg_header_name);
                 if (mjs_strcmp(mjs, &cfg_header_name, HTTP_CONTENT_TYPE, ~0) == 0) {
                     if (mjs_strcmp(mjs, &cfg_header_value, HTTP_CONTENT_TYPE_APPLICATION, ~0) == 0)
                         content_type = http_ct_application;
@@ -179,15 +179,9 @@ static void thingjsHTTPRequest(struct mjs *mjs) {
                         content_type = http_ct_multipart;
                     else if (mjs_strcmp(mjs, &cfg_header_value, HTTP_CONTENT_TYPE_TEXT, ~0) == 0)
                         content_type = http_ct_text;
+                    ESP_LOGD(TAG_HTTP, "Content-Type header: %s", mjs_get_cstring(mjs, &cfg_header_value));
                 } else {
                     ESP_LOGD(TAG_HTTP, "Header: %s : %s", mjs_get_cstring(mjs, &cfg_header_name), mjs_get_cstring(mjs, &cfg_header_value));
-                    /*
-                    snprintf(http_header, HTTP_MAX_HEADER_LENGTH, "%s%s: %s\r\n",
-                             http_header,
-                             mjs_get_cstring(mjs, &cfg_header_name),
-                             mjs_get_cstring(mjs, &cfg_header_value)
-                    );
-                     */
                 }
             }
         }
@@ -195,18 +189,17 @@ static void thingjsHTTPRequest(struct mjs *mjs) {
         // PARAMS (PATH)
         mjs_val_t cfg_params = mjs_get(mjs, config, HTTP_PARAMS, ~0);
         if (mjs_is_object(cfg_params)) {
-            mjs_val_t cfg_param_value = MJS_UNDEFINED;
+            mjs_val_t cfg_param_iterator = MJS_UNDEFINED;
             mjs_val_t cfg_param_name = MJS_UNDEFINED;
 
-            while ((cfg_param_name = mjs_next(mjs, cfg_params, &cfg_param_value)) != MJS_UNDEFINED) {
-                ESP_LOGD(TAG_HTTP, "Params: %s : %s", mjs_get_cstring(mjs, &cfg_param_name), mjs_get_cstring(mjs, &cfg_param_value));
-                /*
-                snprintf(http_header, HTTP_MAX_HEADER_LENGTH, "%s%s: %s\r\n",
-                         http_header,
-                         mjs_get_cstring(mjs, &cfg_param_name),
-                         mjs_get_cstring(mjs, &cfg_param_value)
-                );
-                 */
+            while ((cfg_param_name = mjs_next(mjs, cfg_params, &cfg_param_iterator)) != MJS_UNDEFINED) {
+                mjs_val_t cfg_param_value = mjs_get_v(mjs, cfg_params, cfg_param_name);
+
+                char buffer[128];
+                mjs_sprintf(cfg_param_value, mjs, buffer, 128);
+
+                // void mjs_fprintf(mjs_val_t v, struct mjs *mjs, FILE *fp);
+                ESP_LOGD(TAG_HTTP, "Params: %s : %s", mjs_get_cstring(mjs, &cfg_param_name), buffer);
             }
         }
 
