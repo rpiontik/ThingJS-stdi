@@ -127,7 +127,7 @@ struct st_http_context {
     http_transfer_encoding transfer_encoding;
     mjs_val_t custom_transfer_encoding;
     int connect;
-    unsigned long content_length;
+    size_t content_length;
 };
 
 static int thingjsHTTPConnect(struct mg_str host, unsigned int port) {
@@ -435,7 +435,7 @@ static mjs_err_t thingjsHTTPAppendTransferEncoding(struct st_http_context * cont
 
 static mjs_err_t thingjsHTTPAppendContentLength(struct st_http_context * context) {
     char header[32];
-    int header_len = snprintf(header, 32, "%s: %lu\r\n", HTTP_CONTENT_LENGTH, context->content_length);
+    int header_len = snprintf(header, 32, "%s: %d\r\n", HTTP_CONTENT_LENGTH, context->content_length);
     SWRITEP(header, header_len);
     return MJS_OK;
 }
@@ -578,8 +578,22 @@ static mjs_err_t thingjsHTTPAppendPOSTBody(struct mjs *mjs, mjs_val_t config, st
             }
             case http_ct_text:              //raw
                 break;
-            case http_ct_json:
+            case http_ct_json: {
+                char *json = NULL;
+                if (MJS_OK == (res = mjs_json_stringify(mjs, cfg_data, NULL, 0, &json))) {
+                    context->content_length = strlen(json);
+                    if(context->transfer_encoding == http_te_chunked) {
+                        thingjsHTTPAppendChunk(context, json, context->content_length);
+                        thingjsHTTPAppendChunk(context, "", 0);
+                    } else {
+                        res = thingjsHTTPAppendContentLength(context);
+                        SWRITEP(CLRF, 2);
+                        SWRITEP(json, context->content_length);
+                    }
+                    free(json);
+                }
                 break;
+            }
             case http_ct_multipart:     //multipart/form-data
                 break;
             case http_ct_custom:
