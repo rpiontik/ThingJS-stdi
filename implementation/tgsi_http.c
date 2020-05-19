@@ -30,6 +30,8 @@ const char HTTP_URL[] = "url";
 const char HTTP_HEADERS[] = "headers";
 const char HTTP_PARAMS[] = "params";
 const char HTTP_TIMEOUT[] = "timeout";
+const char HTTP_CFG_CONTENT_TYPE[] = "content_type";
+const char HTTP_CFG_TRANSFER_ENCODING[] = "transfer_encoding";
 const char HTTP_DATA[] = "data";
 const char HTTP_AUTH[] = "auth";
 const char HTTP_AUTH_USERNAME[] = "username";
@@ -38,9 +40,12 @@ const char HTTP_AUTH_PASSWORD[] = "password";
 const char CLRF[] = "\r\n";
 
 const char HTTP_CONTENT_TYPE[] = "Content-Type";
-const char HTTP_CONTENT_TYPE_APPLICATION[] = "application/x-www-form-urlencoded";
+const char HTTP_CONTENT_LENGTH[] = "Content-Length";
+const char HTTP_TRANSFER_ENCODING[] = "Transfer-Encoding";
+const char HTTP_CONTENT_TYPE_FORM_URLENCODED[] = "application/x-www-form-urlencoded";
 const char HTTP_CONTENT_TYPE_MULTIPART[] = "multipart/form-data";
 const char HTTP_CONTENT_TYPE_TEXT[] = "text/plain";
+const char HTTP_CONTENT_TYPE_JSON[] = "application/json";
 
 #define APPNAME pcTaskGetTaskName(NULL)
 
@@ -62,30 +67,42 @@ typedef enum {
     http_options = 6,
     http_trace = 7,
     http_patch = 8,
-    http_unknown = 9
-} http_methods_type;
+    http_custom = 9
+} http_method_type;
 
 typedef enum {
-    http_ct_application,
-    http_ct_multipart,
-    http_ct_text,
+    http_ct_www_form_encoded = 0,
+    http_ct_multipart = 1,
+    http_ct_text = 2,
+    http_ct_json = 3,
+    http_ct_custom = 4
 } http_content_type;
+
+typedef enum {
+    http_te_none = 0,
+    http_te_chunked = 1,
+    // http_te_compress, // not supported
+    // http_te_deflate,  // not supported
+    // http_te_gzip,     // not supported
+    // http_te_identity  // not supported
+    http_te_custom = 2
+} http_transfer_encoding;
 
 #define HTTP_METHODS_NUMBER     9
 
-struct {
-    http_methods_type method;
+const struct {
+    http_method_type method;
     char name[8];
 } methods[HTTP_METHODS_NUMBER] = {
-        {.method = http_get, .name = "GET"},
-        {.method = http_head, .name = "HEAD"},
-        {.method = http_post, .name = "POST"},
-        {.method = http_put, .name = "PUT"},
-        {.method = http_delete, .name = "DELETE"},
-        {.method = http_connect, .name = "CONNECT"},
-        {.method = http_options, .name = "OPTIONS"},
-        {.method = http_trace, .name = "TRACE"},
-        {.method = http_patch, .name = "PATCH"}
+        {.method = http_get,        .name = "GET"},
+        {.method = http_head,       .name = "HEAD"},
+        {.method = http_post,       .name = "POST"},
+        {.method = http_put,        .name = "PUT"},
+        {.method = http_delete,     .name = "DELETE"},
+        {.method = http_connect,    .name = "CONNECT"},
+        {.method = http_options,    .name = "OPTIONS"},
+        {.method = http_trace,      .name = "TRACE"},
+        {.method = http_patch,      .name = "PATCH"}
 };
 
 #define HTTP_BUFFER_LENGTH   256
@@ -103,9 +120,14 @@ struct st_http_context {
     unsigned int port;
     int timeout;
     bool use_ssl;
-    http_methods_type method;
+    http_method_type method;
+    mjs_val_t custom_method;
     http_content_type content_type;
+    mjs_val_t custom_content_type;
+    http_transfer_encoding transfer_encoding;
+    mjs_val_t custom_transfer_encoding;
     int connect;
+    unsigned long content_length;
 };
 
 static int thingjsHTTPConnect(struct mg_str host, unsigned int port) {
@@ -167,17 +189,16 @@ static mjs_err_t thingjsHTTPParseURI(struct mjs *mjs, mjs_val_t config, struct s
                 APPNAME, TAG_HTTP);
         return MJS_INTERNAL_ERROR;
     }
-
     /*
     ESP_LOGD(TAG_HTTP,
              "URL parsed: scheme:[%.*s], user_info:[%.*s], host:[%.*s], port:[%d], path:[%.*s], query:[%.*s], fragment:[%.*s]",
-             (int) scheme.len, scheme.p,
-             (int) user_info.len, user_info.p,
-             (int) host.len, host.p,
-             port,
-             (int) path.len, path.p,
-             (int) query.len, query.p,
-             (int) fragment.len, fragment.p
+             (int) context->scheme.len, context->scheme.p,
+             (int) context->user_info.len, context->user_info.p,
+             (int) context->host.len, context->host.p,
+             context->port,
+             (int) context->path.len, context->path.p,
+             (int) context->query.len, context->query.p,
+             (int) context->fragment.len, context->fragment.p
     );
      */
 
@@ -185,23 +206,57 @@ static mjs_err_t thingjsHTTPParseURI(struct mjs *mjs, mjs_val_t config, struct s
 }
 
 static mjs_err_t thingjsHTTPParseMethod(struct mjs *mjs, mjs_val_t config, struct st_http_context * context) {
-    context->method = http_unknown;
+    context->method = http_get;
     mjs_val_t cfg_method = mjs_get(mjs, config, HTTP_METHOD, ~0);
-    if (mjs_is_string(cfg_method)) {
-        for (int i = 0; i < HTTP_METHODS_NUMBER; ++i) {
-            if (mjs_strcmp(mjs, &cfg_method, methods[i].name, ~0) == 0) {
-                context->method = methods[i].method;
-                break;
-            }
-        }
-
-        if (context->method == http_unknown) {
+    if (mjs_is_number(cfg_method)) {
+        http_method_type method = (http_method_type) mjs_get_int(mjs, cfg_method);
+        if(method >= http_custom) {
             mjs_set_errorf(mjs, MJS_INTERNAL_ERROR, "%s/%s: Unknown http method [%s]", APPNAME, TAG_HTTP,
                            mjs_get_cstring(mjs, &cfg_method));
             return MJS_INTERNAL_ERROR;
+        } else {
+            context->method = method;
         }
-    } else {
-        context->method = http_get;
+    } else if(mjs_is_string(cfg_method)) {
+        context->custom_method = cfg_method;
+        context->method = http_custom;
+    }
+    return MJS_OK;
+}
+
+static mjs_err_t thingjsHTTPParseContentType(struct mjs *mjs, mjs_val_t config, struct st_http_context * context) {
+    context->content_type = http_ct_www_form_encoded;
+    mjs_val_t cfg_content_type = mjs_get(mjs, config, HTTP_CFG_CONTENT_TYPE, ~0);
+    if (!mjs_is_undefined(cfg_content_type)) {
+        http_content_type content_type;
+        if(mjs_is_number(cfg_content_type) && ((content_type = mjs_get_int(mjs, cfg_content_type)) < http_ct_custom)) {
+            context->content_type = content_type;
+        } else if (mjs_is_string(cfg_content_type)) {
+            context->content_type = http_ct_custom;
+            context->custom_content_type = cfg_content_type;
+        } else {
+            mjs_set_errorf(mjs, MJS_INTERNAL_ERROR, "%s/%s: Unknown Content-Type", APPNAME, TAG_HTTP);
+            return MJS_INTERNAL_ERROR;
+        }
+    }
+
+    return MJS_OK;
+}
+
+static mjs_err_t thingjsHTTPParseTransferEncoding(struct mjs *mjs, mjs_val_t config, struct st_http_context * context) {
+    context->transfer_encoding = http_te_none;
+    mjs_val_t cfg_transfer_encoding = mjs_get(mjs, config, HTTP_CFG_TRANSFER_ENCODING, ~0);
+    if (!mjs_is_undefined(cfg_transfer_encoding)) {
+        http_transfer_encoding transfer_encoding;
+        if(mjs_is_number(cfg_transfer_encoding) && ((transfer_encoding = mjs_get_int(mjs, cfg_transfer_encoding)) <= http_te_chunked)) {
+            context->transfer_encoding = transfer_encoding;
+        } else if(mjs_is_string(cfg_transfer_encoding)) {
+            context->custom_transfer_encoding = cfg_transfer_encoding;
+            context->transfer_encoding = http_te_custom;
+        } else {
+            mjs_set_errorf(mjs, MJS_INTERNAL_ERROR, "%s/%s: Unknown Transfer-Encoding", APPNAME, TAG_HTTP);
+            return MJS_INTERNAL_ERROR;
+        }
     }
     return MJS_OK;
 }
@@ -215,10 +270,11 @@ static mjs_err_t thingjsHTTPParseTimeout(struct mjs *mjs, mjs_val_t config, stru
 static mjs_err_t thingjsHTTPAppendTop(struct mjs *mjs, mjs_val_t config, struct st_http_context * context) {
     if(xSemaphoreTake(http_buffer_mutex, portMAX_DELAY ) == pdTRUE) {
         int len = snprintf(http_buffer, HTTP_BUFFER_LENGTH,
-                           "%s %.*s://%.*s",
-                           methods[context->method].name,
-                           (int) context->scheme.len, context->scheme.p,
-                           (int) context->host.len, context->host.p
+                           "%s %.*s",
+                           context->method == http_custom
+                                ? mjs_get_cstring(mjs, &context->custom_method)
+                                : methods[context->method].name,
+                           (int) context->path.len, context->path.p
         );
         SWRITEP(http_buffer, len);
 
@@ -278,7 +334,6 @@ static mjs_err_t thingjsHTTPAppendTop(struct mjs *mjs, mjs_val_t config, struct 
 
 static mjs_err_t thingjsHTTPAppendHeaders(struct mjs *mjs, mjs_val_t config, struct st_http_context * context) {
     if(xSemaphoreTake(http_buffer_mutex, portMAX_DELAY ) == pdTRUE) {
-        context->content_type = http_ct_text;
         mjs_val_t cfg_headers = mjs_get(mjs, config, HTTP_HEADERS, ~0);
         if (mjs_is_object(cfg_headers)) {
             mjs_val_t cfg_header_iterator = MJS_UNDEFINED;
@@ -291,17 +346,9 @@ static mjs_err_t thingjsHTTPAppendHeaders(struct mjs *mjs, mjs_val_t config, str
                 SWRITEP(": ", 2);
 
                 if (mjs_is_string(cfg_header_value)) {
-                    const char * c_header_value =  mjs_get_cstring(mjs, &cfg_header_value);
-                    SWRITEP(c_header_value, strlen(c_header_value));
-
-                    if (mjs_strcmp(mjs, &cfg_header_name, HTTP_CONTENT_TYPE, ~0) == 0) {
-                        if (mjs_strcmp(mjs, &cfg_header_value, HTTP_CONTENT_TYPE_APPLICATION, ~0) == 0)
-                            context->content_type = http_ct_application;
-                        else if (mjs_strcmp(mjs, &cfg_header_value, HTTP_CONTENT_TYPE_MULTIPART, ~0) == 0)
-                            context->content_type = http_ct_multipart;
-                        else if (mjs_strcmp(mjs, &cfg_header_value, HTTP_CONTENT_TYPE_TEXT, ~0) == 0)
-                            context->content_type = http_ct_text;
-                    }
+                    size_t size;
+                    const char * c_header_value =  mjs_get_string(mjs, &cfg_header_value, &size);
+                    SWRITEP(c_header_value, size);
                 } else {
                     mjs_sprintf(cfg_header_value, mjs, http_buffer, HTTP_BUFFER_LENGTH);
                     SWRITEP(http_buffer, strlen(http_buffer));
@@ -313,6 +360,36 @@ static mjs_err_t thingjsHTTPAppendHeaders(struct mjs *mjs, mjs_val_t config, str
         return MJS_OK;
     } else
         return MJS_INTERNAL_ERROR;
+}
+
+static mjs_err_t thingjsHTTPAppendContentType(struct mjs *mjs, mjs_val_t config, struct st_http_context * context) {
+    SWRITEP(HTTP_CONTENT_TYPE, strlen(HTTP_CONTENT_TYPE));
+    SWRITEP(": ", 2);
+    switch(context->content_type) {
+        case http_ct_multipart: {
+            SWRITEP(HTTP_CONTENT_TYPE_MULTIPART, strlen(HTTP_CONTENT_TYPE_MULTIPART));
+            break;
+        }
+        case http_ct_www_form_encoded: {
+            SWRITEP(HTTP_CONTENT_TYPE_FORM_URLENCODED, strlen(HTTP_CONTENT_TYPE_FORM_URLENCODED));
+            break;
+        }
+        case http_ct_text: {
+            SWRITEP(HTTP_CONTENT_TYPE_TEXT, strlen(HTTP_CONTENT_TYPE_TEXT));
+            break;
+        }
+        case http_ct_json: {
+            SWRITEP(HTTP_CONTENT_TYPE_JSON, strlen(HTTP_CONTENT_TYPE_JSON));
+            break;
+        }
+        case http_ct_custom: {
+            size_t size;
+            const char * content_type = mjs_get_string(mjs, &context->custom_content_type, &size);
+            SWRITEP(content_type, size);
+        }
+    }
+    SWRITEP(CLRF, 2);
+    return MJS_OK;
 }
 
 static mjs_err_t thingjsHTTPAppendAuth(struct mjs *mjs, mjs_val_t config, struct st_http_context * context) {
@@ -347,36 +424,97 @@ static mjs_err_t thingjsHTTPAppendAuth(struct mjs *mjs, mjs_val_t config, struct
         return MJS_INTERNAL_ERROR;
 }
 
+static mjs_err_t thingjsHTTPAppendTransferEncoding(struct st_http_context * context) {
+    if(context->transfer_encoding == http_te_chunked) {
+        char header[32];
+        int header_len = snprintf(header, 32, "%s: %s\r\n", HTTP_TRANSFER_ENCODING, "chunked");
+        SWRITEP(header, header_len);
+    }
+    return MJS_OK;
+}
+
+static mjs_err_t thingjsHTTPAppendContentLength(struct st_http_context * context) {
+    char header[32];
+    int header_len = snprintf(header, 32, "%s: %lu\r\n", HTTP_CONTENT_LENGTH, context->content_length);
+    SWRITEP(header, header_len);
+    return MJS_OK;
+}
+
+static mjs_err_t thingjsHTTPAppendChunk(struct st_http_context * context, const char * chunk, size_t size) {
+    char header[16];
+    int header_len = snprintf(header, 32, "%x\r\n", size);
+    SWRITEP(header, header_len);
+    SWRITEP(chunk, size);
+    SWRITEP(CLRF, 2);
+    return MJS_OK;
+}
+
 static mjs_err_t thingjsHTTPAppendPOSTBody(struct mjs *mjs, mjs_val_t config, struct st_http_context * context) {
     mjs_val_t cfg_data = mjs_get(mjs, config, HTTP_DATA, ~0);
 
+    if(context->transfer_encoding == http_te_chunked) {
+        SWRITEP(CLRF, 2);
+    }
+
     // Custom body generator
     if(mjs_is_function(cfg_data)) {
-        while(true) {
-            mjs_val_t part = MJS_UNDEFINED;
-            mjs_err_t res = mjs_apply(mjs, &part, cfg_data, config, 0, NULL);
+        mjs_val_t part = MJS_UNDEFINED;
+        mjs_err_t res = MJS_OK;
+        do {
+            res = mjs_apply(mjs, &part, cfg_data, config, 0, NULL);
             if (res != MJS_OK) {
                 mjs_return(mjs, res);
                 return res;
             }
-            if (mjs_is_string(part)) {
-                size_t size;
-                const char *c_part = mjs_get_string(mjs, &part, &size);
-                SWRITEP(c_part, size);
-            } else if (mjs_is_undefined(part) || mjs_is_null(part)) {
+
+            size_t chunk_size;
+            const char *chunk;
+            bool is_sem_take = false;
+
+            if (mjs_is_undefined(part) || mjs_is_null(part)) {
+                if(context->transfer_encoding == http_te_chunked)
+                    res = thingjsHTTPAppendChunk(context, "", 0);
+                    SWRITEP(CLRF, 2);
                 break;
+            } else if (mjs_is_string(part)) {
+                chunk = mjs_get_string(mjs, &part, &chunk_size);
             } else {
                 if(xSemaphoreTake(http_buffer_mutex, portMAX_DELAY ) == pdTRUE) {
+                    is_sem_take = true;
                     mjs_sprintf(part, mjs, http_buffer, HTTP_BUFFER_LENGTH);
-                    SWRITEP(http_buffer, strlen(http_buffer));
-                    xSemaphoreGive(http_buffer_mutex);
+                    chunk = http_buffer;
+                    chunk_size = strlen(http_buffer);
                 } else
                     return MJS_INTERNAL_ERROR;
             }
-        };
+
+            context->content_length += chunk_size;
+
+            switch (context->transfer_encoding) {
+                case http_te_custom:
+                case http_te_none: {
+                    res = thingjsHTTPAppendContentLength(context);
+                    SWRITEP(CLRF, 2);
+                    SWRITEP(chunk, chunk_size);
+                    break;
+                }
+                case http_te_chunked: {
+                    res = thingjsHTTPAppendChunk(context, chunk, chunk_size);
+                    break;
+                }
+            }
+
+            if(is_sem_take)
+                xSemaphoreGive(http_buffer_mutex);
+
+        } while((res == MJS_OK) && (context->transfer_encoding == http_te_chunked));
+
+        if (res != MJS_OK)
+            return res;
+
     } else if(!mjs_is_undefined(cfg_data)) {
         switch(context->content_type) {
-            case http_ct_application:   //application/x-www-form-urlencoded
+            case http_ct_www_form_encoded:   //application/x-www-form-urlencoded
                 if (mjs_is_object(cfg_data)) {
 
                 } else if (mjs_is_string(cfg_data)) {
@@ -385,7 +523,11 @@ static mjs_err_t thingjsHTTPAppendPOSTBody(struct mjs *mjs, mjs_val_t config, st
                 break;
             case http_ct_text:          //raw
                 break;
+            case http_ct_json:
+                break;
             case http_ct_multipart:     //multipart/form-data
+                break;
+            case http_ct_custom:
                 break;
         }
     }
@@ -441,7 +583,10 @@ static void thingjsHTTPRequest(struct mjs *mjs) {
                 (MJS_OK == (result = thingjsHTTPParseURI(mjs, config, &context)))
                 && (MJS_OK == (result = thingjsHTTPParseMethod(mjs, config, &context)))
                 && (MJS_OK == (result = thingjsHTTPParseTimeout(mjs, config, &context)))
+                && (MJS_OK == (result = thingjsHTTPParseContentType(mjs, config, &context)))
+                && (MJS_OK == (result = thingjsHTTPParseTransferEncoding(mjs, config, &context)))
         ) {
+
             //Open socket connection
             context.connect = thingjsHTTPConnect(context.host, context.port);
 
@@ -449,10 +594,10 @@ static void thingjsHTTPRequest(struct mjs *mjs) {
                     !context.connect
                     || (MJS_OK != thingjsHTTPAppendTop(mjs, config, &context))
                     || (MJS_OK != thingjsHTTPAppendHeaders(mjs, config, &context))
+                    || (MJS_OK != thingjsHTTPAppendContentType(mjs, config, &context))
+                    || (MJS_OK != thingjsHTTPAppendTransferEncoding(&context))
                     || (MJS_OK != thingjsHTTPAppendAuth(mjs, config, &context))
             ) goto on_socket_error;
-
-            SWRITES(CLRF, 2);
 
             if((context.method == http_post) || (context.method == http_put) || (context.method == http_patch)) {
                 switch (result = thingjsHTTPAppendPOSTBody(mjs, config, &context)) {
@@ -500,6 +645,25 @@ mjs_val_t thingjsHTTPConstructor(struct mjs *mjs, cJSON *params) {
     //Bind functions
     stdi_setProtectedProperty(mjs, interface, "request",
                               mjs_mk_foreign_func(mjs, (mjs_func_ptr_t) thingjsHTTPRequest));
+
+    //Consts
+    // Methods
+    for(int i = 0; i < HTTP_METHODS_NUMBER; i++) {
+        char buffer[32];
+        snprintf(buffer, 32, "M_%s", methods[i].name);
+        stdi_setProtectedProperty(mjs, interface, buffer, mjs_mk_number(mjs, (int)methods[i].method));
+    }
+
+    // Transfer type
+    stdi_setProtectedProperty(mjs, interface, "TE_NONE", mjs_mk_number(mjs, (int)http_te_none));
+    stdi_setProtectedProperty(mjs, interface, "TE_CHUNKED", mjs_mk_number(mjs, (int)http_te_chunked));
+
+    // Content types
+    stdi_setProtectedProperty(mjs, interface, "CT_FORM_URLENCODED", mjs_mk_number(mjs, (int)http_ct_www_form_encoded));
+    stdi_setProtectedProperty(mjs, interface, "CT_MULTIPART_FORM_DATA", mjs_mk_number(mjs, (int)http_ct_multipart));
+    stdi_setProtectedProperty(mjs, interface, "CT_TEXT", mjs_mk_number(mjs, (int)http_ct_text));
+    stdi_setProtectedProperty(mjs, interface, "CT_JSON", mjs_mk_number(mjs, (int)http_ct_json));
+
 
     //Return mJS interface object
     return interface;
