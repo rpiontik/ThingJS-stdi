@@ -449,9 +449,25 @@ static mjs_err_t thingjsHTTPAppendChunk(struct st_http_context * context, const 
     return MJS_OK;
 }
 
-static mjs_err_t thingjsHTTPAppendPOSTBody(struct mjs *mjs, mjs_val_t config, struct st_http_context * context) {
-    mjs_val_t cfg_data = mjs_get(mjs, config, HTTP_DATA, ~0);
+static void thingjsHTTPAppendURLEncodeStr(struct mbuf * mb, const char * str, size_t size) {
+    const struct mg_str safe = mg_mk_str("._-$,;~()/");
+    char hex_buf[3];
+    for(size_t i = 0; i < size; i++) {
+        const unsigned char c = *((const unsigned char *) str + i);
+        if (isalnum(c) || mg_strchr(safe, c) != NULL) {
+            mbuf_append(mb, &c, 1);
+        } else if (c == ' ') {
+            mbuf_append(mb, "+", 1);
+        } else {
+            snprintf(hex_buf, 3, "%%%02x", c);
+            mbuf_append(mb, hex_buf, 3);
+        }
+    }
+}
 
+static mjs_err_t thingjsHTTPAppendPOSTBody(struct mjs *mjs, mjs_val_t config, struct st_http_context * context) {
+    mjs_err_t res = MJS_OK;
+    mjs_val_t cfg_data = mjs_get(mjs, config, HTTP_DATA, ~0);
     if(context->transfer_encoding == http_te_chunked) {
         SWRITEP(CLRF, 2);
     }
@@ -459,7 +475,6 @@ static mjs_err_t thingjsHTTPAppendPOSTBody(struct mjs *mjs, mjs_val_t config, st
     // Custom body generator
     if(mjs_is_function(cfg_data)) {
         mjs_val_t part = MJS_UNDEFINED;
-        mjs_err_t res = MJS_OK;
         do {
             res = mjs_apply(mjs, &part, cfg_data, config, 0, NULL);
             if (res != MJS_OK) {
@@ -508,20 +523,60 @@ static mjs_err_t thingjsHTTPAppendPOSTBody(struct mjs *mjs, mjs_val_t config, st
                 xSemaphoreGive(http_buffer_mutex);
 
         } while((res == MJS_OK) && (context->transfer_encoding == http_te_chunked));
-
-        if (res != MJS_OK)
-            return res;
-
-    } else if(!mjs_is_undefined(cfg_data)) {
+    } else if(mjs_is_object(cfg_data)) {
         switch(context->content_type) {
-            case http_ct_www_form_encoded:   //application/x-www-form-urlencoded
-                if (mjs_is_object(cfg_data)) {
+            case http_ct_www_form_encoded: { //application/x-www-form-urlencoded
+                struct mbuf mb;
+                mbuf_init(&mb, 0);
 
-                } else if (mjs_is_string(cfg_data)) {
+                mjs_val_t cfg_field_iterator = MJS_UNDEFINED;
+                mjs_val_t cfg_field_name = MJS_UNDEFINED;
+                bool is_first = true;
 
+                while ((cfg_field_name = mjs_next(mjs, cfg_data, &cfg_field_iterator)) != MJS_UNDEFINED) {
+                    if(!is_first)
+                        mbuf_append(&mb, "&", 1);
+
+                    const char * c_field_name =  mjs_get_cstring(mjs, &cfg_field_name);
+                    thingjsHTTPAppendURLEncodeStr(&mb, c_field_name, strlen(c_field_name));
+
+                    mbuf_append(&mb, "=", 1);
+
+                    mjs_val_t cfg_field_value = mjs_get_v(mjs, cfg_data, cfg_field_name);
+                    if (mjs_is_string(cfg_field_value)) {
+                        size_t size;
+                        const char * c_header_value =  mjs_get_string(mjs, &cfg_field_value, &size);
+                        thingjsHTTPAppendURLEncodeStr(&mb, c_header_value, size);
+                    } else {
+                        if(xSemaphoreTake(http_buffer_mutex, portMAX_DELAY ) == pdTRUE) {
+                            mjs_sprintf(cfg_field_value, mjs, http_buffer, HTTP_BUFFER_LENGTH);
+                            thingjsHTTPAppendURLEncodeStr(&mb, http_buffer, strlen(http_buffer));
+                            xSemaphoreGive(http_buffer_mutex);
+                        } else
+                            return MJS_INTERNAL_ERROR;
+                    }
+
+                    if(context->transfer_encoding == http_te_chunked) {
+                        thingjsHTTPAppendChunk(context, mb.buf, mb.len);
+                        mbuf_clear(&mb);
+                    }
+
+                    is_first = false;
                 }
+
+                if(context->transfer_encoding == http_te_chunked) {
+                    thingjsHTTPAppendChunk(context, "", 0);
+                } else {
+                    context->content_length = mb.len;
+                    res = thingjsHTTPAppendContentLength(context);
+                    SWRITEP(CLRF, 2);
+                    SWRITEP(mb.buf, mb.len);
+                }
+
+                mbuf_free(&mb);
                 break;
-            case http_ct_text:          //raw
+            }
+            case http_ct_text:              //raw
                 break;
             case http_ct_json:
                 break;
@@ -532,7 +587,7 @@ static mjs_err_t thingjsHTTPAppendPOSTBody(struct mjs *mjs, mjs_val_t config, st
         }
     }
 
-    return MJS_OK;
+    return res;
 }
 
 static mjs_err_t thingjsHTTPReadResponse(struct mjs *mjs, mjs_val_t config, struct st_http_context * context) {
