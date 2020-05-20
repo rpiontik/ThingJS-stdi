@@ -635,11 +635,6 @@ static mjs_err_t thingjsHTTPAppendDataObject(struct mjs *mjs, mjs_val_t data, st
             break;
         }
         case http_ct_multipart: {    //multipart/form-data
-            /*
-            if (context->transfer_encoding == http_te_chunked)
-                SWRITEP(CLRF, 2);
-                */
-
             struct mbuf mb;
             mbuf_init(&mb, 0);
 
