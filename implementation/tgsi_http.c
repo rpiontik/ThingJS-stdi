@@ -44,6 +44,10 @@ const char HTTP_CONTENT_LENGTH[] = "Content-Length";
 const char HTTP_TRANSFER_ENCODING[] = "Transfer-Encoding";
 const char HTTP_CONTENT_TYPE_FORM_URLENCODED[] = "application/x-www-form-urlencoded";
 const char HTTP_CONTENT_TYPE_MULTIPART[] = "multipart/form-data";
+const char HTTP_CONTENT_BOUNDARY[] = "tjs-boundary";
+const char HTTP_CONTENT_BOUNDARY_PREXIF[] = "--tjs-boundary\r\nContent-Disposition: form-data; name=\"";
+const char HTTP_CONTENT_BOUNDARY_POSTFIX[] = "\"\r\n\r\n";
+const char HTTP_CONTENT_BOUNDARY_CLOSE[] = "--tjs-boundary--\r\n";
 const char HTTP_CONTENT_TYPE_TEXT[] = "text/plain";
 const char HTTP_CONTENT_TYPE_JSON[] = "application/json";
 
@@ -51,6 +55,7 @@ const char HTTP_CONTENT_TYPE_JSON[] = "application/json";
 
 #define SWRITEP_(buffer, length) if(0 > write(context->connect, buffer, length)) return MJS_INTERNAL_ERROR;
 #define SWRITEP(buffer, length) {fprintf(stdout, "%.*s", length, (char*)buffer); if(0 > write(context->connect, buffer, length)) return MJS_INTERNAL_ERROR;}
+#define SWRITEP_RES(buffer, length) {fprintf(stdout, "%.*s", length, (char*)buffer); if(0 > write(context->connect, buffer, length)) res = MJS_INTERNAL_ERROR;}
 #define SWRITES_(buffer, length) if(0 > write(context.connect, buffer, length)) goto on_socket_error;
 #define SWRITES(buffer, length) {fprintf(stdout, "%.*s", length, (char*)buffer); if(0 > write(context.connect, buffer, length)) goto on_socket_error;}
 
@@ -356,6 +361,9 @@ static mjs_err_t thingjsHTTPAppendContentType(struct mjs *mjs, mjs_val_t config,
     switch (context->content_type) {
         case http_ct_multipart: {
             SWRITEP(HTTP_CONTENT_TYPE_MULTIPART, strlen(HTTP_CONTENT_TYPE_MULTIPART));
+            SWRITEP("; boundary=\"", 12);
+            SWRITEP(HTTP_CONTENT_BOUNDARY, strlen(HTTP_CONTENT_BOUNDARY));
+            SWRITEP("\"", 1);
             break;
         }
         case http_ct_www_form_encoded: {
@@ -436,16 +444,6 @@ static mjs_err_t thingjsHTTPAppendChunk(struct st_http_context *context, const c
     SWRITEP(CLRF, 2);
     return MJS_OK;
 }
-/*
-static mjs_err_t thingjsHTTPAppendMJSVariableAsText(struct mjs *mjs, mjs_val_t variable, struct st_http_context *context) {
-    if (xSemaphoreTake(http_buffer_mutex, portMAX_DELAY) == pdTRUE) {
-        mjs_sprintf(variable, mjs, http_buffer, HTTP_BUFFER_LENGTH);
-        SWRITEP(http_buffer, strlen(http_buffer));
-        xSemaphoreGive(http_buffer_mutex);
-    } else
-        return MJS_INTERNAL_ERROR;
-}
- */
 
 static void thingjsHTTPAppendURLEncodeStr(struct mbuf *mb, const char *str, size_t size) {
     const struct mg_str safe = mg_mk_str("._-$,;~()/");
@@ -464,7 +462,7 @@ static void thingjsHTTPAppendURLEncodeStr(struct mbuf *mb, const char *str, size
 }
 
 static mjs_err_t thingjsHTTPAppendDataFunction(struct mjs *mjs, mjs_val_t config, mjs_val_t func,
-        struct st_http_context *context) {
+                                               struct st_http_context *context) {
     mjs_err_t res = MJS_OK;
     mjs_val_t part = MJS_UNDEFINED;
     do {
@@ -537,11 +535,13 @@ static mjs_err_t thingjsHTTPAppendJSON(struct mjs *mjs, mjs_val_t variable, stru
     return res;
 }
 
-static mjs_err_t thingjsHTTPAppendTEXT(struct mjs *mjs, mjs_val_t variable, struct st_http_context *context) {
+static mjs_err_t thingjsHTTPAppendTEXT(struct mjs *mjs, mjs_val_t variable, struct st_http_context *context,
+                                       bool url_encode) {
     mjs_err_t res = MJS_OK;
+    struct mbuf mb;
     bool is_sem_take = false;
     const char *c_data = NULL;
-    if(mjs_is_string(variable)) {
+    if (mjs_is_string(variable)) {
         c_data = mjs_get_string(mjs, &variable, &context->content_length);
     } else {
         if (xSemaphoreTake(http_buffer_mutex, portMAX_DELAY) == pdTRUE) {
@@ -553,16 +553,26 @@ static mjs_err_t thingjsHTTPAppendTEXT(struct mjs *mjs, mjs_val_t variable, stru
             return MJS_INTERNAL_ERROR;
     }
 
+    if (url_encode) {
+        mbuf_init(&mb, 0);
+        thingjsHTTPAppendURLEncodeStr(&mb, c_data, context->content_length);
+        context->content_length = mb.len;
+        c_data = mb.buf;
+    }
+
     if (context->transfer_encoding == http_te_chunked) {
         thingjsHTTPAppendChunk(context, c_data, context->content_length);
         thingjsHTTPAppendChunk(context, "", 0);
     } else {
-        res = thingjsHTTPAppendContentLength(context);
-        SWRITEP(CLRF, 2);
-        SWRITEP(c_data, context->content_length);
+        if( MJS_OK == (res = thingjsHTTPAppendContentLength(context))) {
+            SWRITEP_RES(CLRF, 2);
+            SWRITEP_RES(c_data, context->content_length);
+        }
     }
 
-    if(is_sem_take)
+    if (url_encode)
+        mbuf_free(&mb);
+    if (is_sem_take)
         xSemaphoreGive(http_buffer_mutex);
 
     return res;
@@ -615,9 +625,66 @@ static mjs_err_t thingjsHTTPAppendDataObject(struct mjs *mjs, mjs_val_t data, st
                 thingjsHTTPAppendChunk(context, "", 0);
             } else {
                 context->content_length = mb.len;
-                res = thingjsHTTPAppendContentLength(context);
+                if(MJS_OK == (res = thingjsHTTPAppendContentLength(context))) {
+                    SWRITEP_RES(CLRF, 2);
+                    SWRITEP_RES(mb.buf, mb.len);
+                }
+            }
+
+            mbuf_free(&mb);
+            break;
+        }
+        case http_ct_multipart: {    //multipart/form-data
+            /*
+            if (context->transfer_encoding == http_te_chunked)
                 SWRITEP(CLRF, 2);
-                SWRITEP(mb.buf, mb.len);
+                */
+
+            struct mbuf mb;
+            mbuf_init(&mb, 0);
+
+            mjs_val_t cfg_field_iterator = MJS_UNDEFINED;
+            mjs_val_t cfg_field_name = MJS_UNDEFINED;
+            while ((res == MJS_OK) && (cfg_field_name = mjs_next(mjs, data, &cfg_field_iterator)) != MJS_UNDEFINED) {
+                const char *c_field_name = mjs_get_cstring(mjs, &cfg_field_name);
+                mbuf_append(&mb, HTTP_CONTENT_BOUNDARY_PREXIF, strlen(HTTP_CONTENT_BOUNDARY_PREXIF));
+                mbuf_append(&mb, c_field_name, strlen(c_field_name));
+                mbuf_append(&mb, HTTP_CONTENT_BOUNDARY_POSTFIX, strlen(HTTP_CONTENT_BOUNDARY_POSTFIX));
+
+                mjs_val_t cfg_field_value = mjs_get_v(mjs, data, cfg_field_name);
+                if(mjs_is_string(cfg_field_value)) {
+                    size_t size;
+                    const char * c_value = mjs_get_string(mjs, &cfg_field_value, &size);
+                    mbuf_append(&mb, c_value, size);
+                    mbuf_append(&mb, CLRF, 2);
+                } else if(mjs_is_function(cfg_field_value)) {
+
+                } else {
+                    if (xSemaphoreTake(http_buffer_mutex, portMAX_DELAY) == pdTRUE) {
+                        mjs_sprintf(data, mjs, http_buffer, HTTP_BUFFER_LENGTH);
+                        mbuf_append(&mb, http_buffer, strlen(http_buffer));
+                        mbuf_append(&mb, CLRF, 2);
+                        xSemaphoreGive(http_buffer_mutex);
+                    } else {
+                        res = MJS_INTERNAL_ERROR;
+                    }
+                }
+
+                if (context->transfer_encoding == http_te_chunked) {
+                    res = thingjsHTTPAppendChunk(context, mb.buf, mb.len);
+                    context->content_length += mb.len;
+                    mbuf_clear(&mb);
+                }
+            }
+
+            mbuf_append(&mb, HTTP_CONTENT_BOUNDARY_CLOSE, strlen(HTTP_CONTENT_BOUNDARY_CLOSE));
+            if (context->transfer_encoding == http_te_chunked) {
+                res = thingjsHTTPAppendChunk(context, "", 0);
+            } else {
+                context->content_length = mb.len;
+                thingjsHTTPAppendContentLength(context);
+                SWRITEP(CLRF, 2);
+                SWRITEP_RES(mb.buf, mb.len);
             }
 
             mbuf_free(&mb);
@@ -625,47 +692,28 @@ static mjs_err_t thingjsHTTPAppendDataObject(struct mjs *mjs, mjs_val_t data, st
         }
         case http_ct_text:              //raw
         case http_ct_custom: {
-            res = thingjsHTTPAppendTEXT(mjs, data, context);
+            res = thingjsHTTPAppendTEXT(mjs, data, context, false);
             break;
         }
         case http_ct_json: {
             res = thingjsHTTPAppendJSON(mjs, data, context);
             break;
         }
-        case http_ct_multipart:     //multipart/form-data
-            break;
     }
     return res;
 }
 
 static mjs_err_t thingjsHTTPAppendDataString(struct mjs *mjs, mjs_val_t data, struct st_http_context *context) {
     mjs_err_t res = MJS_OK;
-    size_t data_size;
-    const char *c_data = mjs_get_string(mjs, &data, &data_size);
 
     switch (context->content_type) {
         case http_ct_www_form_encoded: { //application/x-www-form-urlencoded
-            struct mbuf mb;
-            mbuf_init(&mb, 0);
-
-            thingjsHTTPAppendURLEncodeStr(&mb, c_data, data_size);
-            context->content_length = mb.len;
-
-            if (context->transfer_encoding == http_te_chunked) {
-                thingjsHTTPAppendChunk(context, mb.buf, mb.len);
-                thingjsHTTPAppendChunk(context, "", 0);
-            } else {
-                res = thingjsHTTPAppendContentLength(context);
-                SWRITEP(CLRF, 2);
-                SWRITEP(mb.buf, mb.len);
-            }
-
-            mbuf_free(&mb);
+            res = thingjsHTTPAppendTEXT(mjs, data, context, true);
             break;
         }
         case http_ct_text:              //raw
         case http_ct_custom: {
-            res = thingjsHTTPAppendTEXT(mjs, data, context);
+            res = thingjsHTTPAppendTEXT(mjs, data, context, false);
             break;
         }
         case http_ct_json: {
@@ -673,12 +721,17 @@ static mjs_err_t thingjsHTTPAppendDataString(struct mjs *mjs, mjs_val_t data, st
             break;
         }
         case http_ct_multipart:     //multipart/form-data
-            mjs_set_errorf(mjs, MJS_INTERNAL_ERROR, "%s/%s: Incompatible options [data is string] and [content_type is CT_MULTIPART_FORM_DATA]",
-                    APPNAME, TAG_HTTP);
-            return MJS_INTERNAL_ERROR;
+            mjs_set_errorf(mjs, MJS_INTERNAL_ERROR,
+                           "%s/%s: Incompatible options [data is string] and [content_type is CT_MULTIPART_FORM_DATA]",
+                           APPNAME, TAG_HTTP);
+            res = MJS_INTERNAL_ERROR;
             break;
     }
     return res;
+}
+
+static inline mjs_err_t thingjsHTTPAppendDataOtherTypes(struct mjs *mjs, mjs_val_t data, struct st_http_context *context) {
+    return thingjsHTTPAppendDataString(mjs, data, context);
 }
 
 static mjs_err_t thingjsHTTPAppendPOSTBody(struct mjs *mjs, mjs_val_t config, struct st_http_context *context) {
@@ -694,7 +747,11 @@ static mjs_err_t thingjsHTTPAppendPOSTBody(struct mjs *mjs, mjs_val_t config, st
         res = thingjsHTTPAppendDataObject(mjs, cfg_data, context);
     } else if (mjs_is_string(cfg_data)) {
         res = thingjsHTTPAppendDataString(mjs, cfg_data, context);
+    } else {
+        res = thingjsHTTPAppendDataOtherTypes(mjs, cfg_data, context);
     }
+
+    SWRITEP(CLRF, 2);
 
     return res;
 }
