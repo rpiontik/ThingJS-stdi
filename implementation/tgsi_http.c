@@ -113,6 +113,14 @@ const struct {
 char http_buffer[HTTP_BUFFER_LENGTH] = {0};
 xSemaphoreHandle http_buffer_mutex;
 
+struct st_http_response {
+    mjs_val_t headers;
+    int code;
+    http_content_type content_type;
+    http_transfer_encoding transfer_encoding;
+    size_t content_length;
+};
+
 struct st_http_context {
     const char *uri;
     struct mg_str scheme;
@@ -129,7 +137,6 @@ struct st_http_context {
     http_content_type content_type;
     mjs_val_t custom_content_type;
     http_transfer_encoding transfer_encoding;
-    mjs_val_t custom_transfer_encoding;
     int connect;
     size_t content_length;
 };
