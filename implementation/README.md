@@ -80,7 +80,24 @@ These are the available config options for making requests. Only the `url` is re
 ### Simple GET request
 ```js
 $res.http.request('http://website.me/', function(response) {
-    print(response.data);
+    print('status:', response.code);
+    print('data:', response.data);
+});
+```
+
+### Request with headers
+```js
+$res.http.request({
+    url: 'http://website.me/',
+    headers: {
+        header1 : 'header1',
+        header2 : 'header2'    
+    }
+}, function(response) {
+    print('headers:');
+    for (let header in response.headers) {
+        print('   [', header, ']: [', response.headers[header], ']');
+    }
 });
 ```
 
@@ -97,8 +114,7 @@ $res.http.request({
 });
 ```
 
-
-### Simple JSON request
+### Simple JSON request and response
 ```js
 $res.http.request({
     url: 'http://website.me/',
@@ -109,7 +125,7 @@ $res.http.request({
         arr: ['item1', 'item2']    
     }   
 }, function(response) {
-    print(response.data);
+    print(JSON.stringify(response.data));
 });
 ```
 
