@@ -631,8 +631,41 @@ static mjs_err_t thingjsHTTPAppendTEXT(struct mjs *mjs, mjs_val_t variable, stru
     return res;
 }
 
+static mjs_err_t thingjsHTTPMbufFlushChunked(struct mbuf *mb, struct st_http_context *context) {
+    mjs_err_t res = MJS_OK;
+    if ((context->transfer_encoding == http_te_chunked) && (mb->len > 0)) {
+        res = thingjsHTTPAppendChunk(context, mb->buf, mb->len);
+        context->content_length += mb->len;
+        mbuf_clear(mb);
+    }
+    return res;
+}
 
-static mjs_err_t thingjsHTTPAppendDataObject(struct mjs *mjs, mjs_val_t data, struct st_http_context *context) {
+static mjs_err_t thingjsHTTPMbufAppendString(struct mbuf *mb, struct mjs *mjs, mjs_val_t value, bool urlencode) {
+    mjs_err_t res = MJS_OK;
+    if (mjs_is_string(value)) {
+        size_t size;
+        const char *c_value = mjs_get_string(mjs, &value, &size);
+        if (urlencode)
+            thingjsHTTPAppendURLEncodeStr(mb, c_value, size);
+        else
+            mbuf_append(mb, c_value, size);
+    } else {
+        if (xSemaphoreTake(http_buffer_mutex, portMAX_DELAY) == pdTRUE) {
+            mjs_sprintf(value, mjs, http_buffer, HTTP_BUFFER_LENGTH);
+            if (urlencode)
+                thingjsHTTPAppendURLEncodeStr(mb, http_buffer, strlen(http_buffer));
+            else
+                mbuf_append(mb, http_buffer, strlen(http_buffer));
+            xSemaphoreGive(http_buffer_mutex);
+        } else
+            res = MJS_INTERNAL_ERROR;
+    }
+    return res;
+}
+
+static mjs_err_t
+thingjsHTTPAppendDataObject(struct mjs *mjs, mjs_val_t config, mjs_val_t data, struct st_http_context *context) {
     mjs_err_t res = MJS_OK;
     switch (context->content_type) {
         case http_ct_www_form_encoded: { //application/x-www-form-urlencoded
@@ -643,32 +676,18 @@ static mjs_err_t thingjsHTTPAppendDataObject(struct mjs *mjs, mjs_val_t data, st
             mjs_val_t cfg_field_name = MJS_UNDEFINED;
             bool is_first = true;
 
-            while ((cfg_field_name = mjs_next(mjs, data, &cfg_field_iterator)) != MJS_UNDEFINED) {
+            while ((res == MJS_OK) && (cfg_field_name = mjs_next(mjs, data, &cfg_field_iterator)) != MJS_UNDEFINED) {
                 if (!is_first)
                     mbuf_append(&mb, "&", 1);
 
-                const char *c_field_name = mjs_get_cstring(mjs, &cfg_field_name);
-                thingjsHTTPAppendURLEncodeStr(&mb, c_field_name, strlen(c_field_name));
-
-                mbuf_append(&mb, "=", 1);
-
-                mjs_val_t cfg_field_value = mjs_get_v(mjs, data, cfg_field_name);
-                if (mjs_is_string(cfg_field_value)) {
-                    size_t size;
-                    const char *c_header_value = mjs_get_string(mjs, &cfg_field_value, &size);
-                    thingjsHTTPAppendURLEncodeStr(&mb, c_header_value, size);
-                } else {
-                    if (xSemaphoreTake(http_buffer_mutex, portMAX_DELAY) == pdTRUE) {
-                        mjs_sprintf(cfg_field_value, mjs, http_buffer, HTTP_BUFFER_LENGTH);
-                        thingjsHTTPAppendURLEncodeStr(&mb, http_buffer, strlen(http_buffer));
-                        xSemaphoreGive(http_buffer_mutex);
-                    } else
-                        return MJS_INTERNAL_ERROR;
-                }
-
-                if (context->transfer_encoding == http_te_chunked) {
-                    thingjsHTTPAppendChunk(context, mb.buf, mb.len);
-                    mbuf_clear(&mb);
+                if (MJS_OK == (res = thingjsHTTPMbufAppendString(&mb, mjs, cfg_field_name, true))) {
+                    mbuf_append(&mb, "=", 1);
+                    if (
+                            (MJS_OK !=
+                             (res = thingjsHTTPMbufAppendString(&mb, mjs, mjs_get_v(mjs, data, cfg_field_name), true)))
+                            || (MJS_OK != (res = thingjsHTTPMbufFlushChunked(&mb, context)))
+                            )
+                        break;
                 }
 
                 is_first = false;
@@ -694,35 +713,52 @@ static mjs_err_t thingjsHTTPAppendDataObject(struct mjs *mjs, mjs_val_t data, st
             mjs_val_t cfg_field_iterator = MJS_UNDEFINED;
             mjs_val_t cfg_field_name = MJS_UNDEFINED;
             while ((res == MJS_OK) && (cfg_field_name = mjs_next(mjs, data, &cfg_field_iterator)) != MJS_UNDEFINED) {
-                const char *c_field_name = mjs_get_cstring(mjs, &cfg_field_name);
                 mbuf_append(&mb, HTTP_CONTENT_BOUNDARY_PREXIF, strlen(HTTP_CONTENT_BOUNDARY_PREXIF));
+
+                const char *c_field_name = mjs_get_cstring(mjs, &cfg_field_name);
+                mjs_val_t cfg_field_value = mjs_get_v(mjs, data, cfg_field_name);
+
+                /*
+                if (mjs_is_object(cfg_field_value)) {
+                    mjs_val_t cfg_field_headers = mjs_get(mjs, cfg_field_value, HTTP_HEADERS, ~0);
+                    if (mjs_is_object(cfg_field_headers)) {
+                        mjs_val_t cfg_header_iterator = MJS_UNDEFINED;
+                        mjs_val_t cfg_header_name = MJS_UNDEFINED;
+                        while ((res == MJS_OK) &&
+                               (cfg_header_name = mjs_next(mjs, cfg_field_headers, &cfg_header_iterator)) !=
+                               MJS_UNDEFINED) {
+                            mjs_val_t cfg_header_value = mjs_get_v(mjs, cfg_field_headers, cfg_header_name);
+                        }
+                    }
+
+                }
+                */
+
                 mbuf_append(&mb, c_field_name, strlen(c_field_name));
                 mbuf_append(&mb, HTTP_CONTENT_BOUNDARY_POSTFIX, strlen(HTTP_CONTENT_BOUNDARY_POSTFIX));
 
-                mjs_val_t cfg_field_value = mjs_get_v(mjs, data, cfg_field_name);
-                if (mjs_is_string(cfg_field_value)) {
-                    size_t size;
-                    const char *c_value = mjs_get_string(mjs, &cfg_field_value, &size);
-                    mbuf_append(&mb, c_value, size);
-                    mbuf_append(&mb, CLRF, 2);
-                } else if (mjs_is_function(cfg_field_value)) {
+                if (mjs_is_function(cfg_field_value)) {
+                    if (MJS_OK == (res = thingjsHTTPMbufFlushChunked(&mb, context))) {
+                        mjs_val_t mjs_part = MJS_UNDEFINED;
+                        do {
+                            res = mjs_apply(mjs, &mjs_part, cfg_field_value, config, 0, NULL);
+                            if(mjs_is_undefined(mjs_part) || (res != MJS_OK))
+                                break;
+                            if (MJS_OK == (res = thingjsHTTPMbufAppendString(&mb, mjs, mjs_part, false)))
+                                res = thingjsHTTPMbufFlushChunked(&mb, context);
+                        } while (MJS_OK == res && context->transfer_encoding == http_te_chunked);
+                        mbuf_append(&mb, CLRF, 2);
+                    }
+                } else if (mjs_is_object(cfg_field_value)) {
 
                 } else {
-                    if (xSemaphoreTake(http_buffer_mutex, portMAX_DELAY) == pdTRUE) {
-                        mjs_sprintf(data, mjs, http_buffer, HTTP_BUFFER_LENGTH);
-                        mbuf_append(&mb, http_buffer, strlen(http_buffer));
+                    if (MJS_OK == (res = thingjsHTTPMbufAppendString(&mb, mjs, cfg_field_value, false)))
                         mbuf_append(&mb, CLRF, 2);
-                        xSemaphoreGive(http_buffer_mutex);
-                    } else {
-                        res = MJS_INTERNAL_ERROR;
-                    }
+                    else
+                        break;
                 }
 
-                if (context->transfer_encoding == http_te_chunked) {
-                    res = thingjsHTTPAppendChunk(context, mb.buf, mb.len);
-                    context->content_length += mb.len;
-                    mbuf_clear(&mb);
-                }
+                res = thingjsHTTPMbufFlushChunked(&mb, context);
             }
 
             mbuf_append(&mb, HTTP_CONTENT_BOUNDARY_CLOSE, strlen(HTTP_CONTENT_BOUNDARY_CLOSE));
@@ -793,7 +829,7 @@ static mjs_err_t thingjsHTTPAppendPOSTBody(struct mjs *mjs, mjs_val_t config, st
     if (mjs_is_function(cfg_data)) {
         res = thingjsHTTPAppendDataFunction(mjs, config, cfg_data, context);
     } else if (mjs_is_object(cfg_data)) {
-        res = thingjsHTTPAppendDataObject(mjs, cfg_data, context);
+        res = thingjsHTTPAppendDataObject(mjs, config, cfg_data, context);
     } else if (mjs_is_string(cfg_data)) {
         res = thingjsHTTPAppendDataString(mjs, cfg_data, context);
     } else {
@@ -825,7 +861,6 @@ static mjs_err_t thingjsHTTPParseResponse(struct mjs *mjs, mjs_val_t config, str
 
     size_t mjs_header_value_offset = 0;
 
-    size_t received = 0;
     struct mbuf mb;
     mbuf_init(&mb, 128);
     if (xSemaphoreTake(http_buffer_mutex, portMAX_DELAY) == pdTRUE) {
@@ -840,11 +875,19 @@ static mjs_err_t thingjsHTTPParseResponse(struct mjs *mjs, mjs_val_t config, str
 
             for (int i = 0; (i < read_count) && (res == MJS_OK); i++) {
                 if (section == sec_http_body) {
-                    if(response.content_type == http_ct_json) {
+                    if (response.content_type == http_ct_json) {
                         mbuf_append(&mb, &http_buffer[i], read_count - i);
-                        break;
+                    } else {
+                        stdi_setProtectedProperty(mjs, mjs_response, HTTP_DATA,
+                                                  mjs_mk_string(mjs, &http_buffer[i], read_count - i, true));
+                        mjs_val_t mjs_result = MJS_UNDEFINED;
+                        res = mjs_apply(mjs, &mjs_result, mjs_res_process, config, 1, &mjs_response);
+                        if (mjs_is_boolean(mjs_result) && !mjs_get_bool(mjs, mjs_result)) {
+                            // Break response processing
+                            mjs_res_process = MJS_UNDEFINED;
+                        }
                     }
-                    continue;
+                    break;
                 }
 
                 putchar(http_buffer[i]);
@@ -882,22 +925,23 @@ static mjs_err_t thingjsHTTPParseResponse(struct mjs *mjs, mjs_val_t config, str
                             mbuf_append(&mb, "\0", 1);
                             mjs_header_value_offset = mb.len;
                             section = sec_http_header_value;
-                            for(;http_buffer[i + 1] == ' ' && i < read_count; i++);
+                            for (; http_buffer[i + 1] == ' ' && i < read_count; i++);
                         } else mbuf_append(&mb, &http_buffer[i], 1);
                         break;
                     case sec_http_header_value:
                         if (r_prev && http_buffer[i] == '\n') {
-                            const char * c_value = mb.buf + mjs_header_value_offset;
+                            const char *c_value = mb.buf + mjs_header_value_offset;
                             const size_t size = mb.len - mjs_header_value_offset;
-                            stdi_setProtectedProperty(mjs, mjs_headers, mb.buf, mjs_mk_string(mjs, c_value, size, true));
+                            stdi_setProtectedProperty(mjs, mjs_headers, mb.buf,
+                                                      mjs_mk_string(mjs, c_value, size, true));
                             mbuf_append(&mb, "\0", 1);
-                            if(strcmp(mb.buf, HTTP_TRANSFER_ENCODING) == 0) {
-                                if(strcmp(c_value, HTTP_TRANSFER_ENCODING_CHUNKED) == 0)
+                            if (strcmp(mb.buf, HTTP_TRANSFER_ENCODING) == 0) {
+                                if (strcmp(c_value, HTTP_TRANSFER_ENCODING_CHUNKED) == 0)
                                     response.transfer_encoding = http_te_chunked;
-                            } else if(strcmp(mb.buf, HTTP_CONTENT_TYPE) == 0) {
-                                if(strncmp(c_value, HTTP_CONTENT_TYPE_JSON, strlen(HTTP_CONTENT_TYPE_JSON)) == 0)
+                            } else if (strcmp(mb.buf, HTTP_CONTENT_TYPE) == 0) {
+                                if (strncmp(c_value, HTTP_CONTENT_TYPE_JSON, strlen(HTTP_CONTENT_TYPE_JSON)) == 0)
                                     response.content_type = http_ct_json;
-                            } else if(strcmp(mb.buf, HTTP_CONTENT_LENGTH) == 0) {
+                            } else if (strcmp(mb.buf, HTTP_CONTENT_LENGTH) == 0) {
                                 response.content_length = strtol(c_value, (char **) NULL, 10);
                             }
 
@@ -910,17 +954,16 @@ static mjs_err_t thingjsHTTPParseResponse(struct mjs *mjs, mjs_val_t config, str
                 }
             }
         } while ((read_count > 0) && (res == MJS_OK));
-        xSemaphoreGive(http_buffer_mutex);
 
-        if((res == MJS_OK) && (section == sec_http_body) && mjs_is_function(mjs_res_process)) {
-            if(response.content_type == http_ct_json) {
+        xSemaphoreGive(http_buffer_mutex);
+        if ((res == MJS_OK) && (section == sec_http_body) && mjs_is_function(mjs_res_process)) {
+            if (response.content_type == http_ct_json) {
                 mjs_json_parse(mjs, mb.buf, mb.len, &mjs_data);
                 stdi_setProtectedProperty(mjs, mjs_response, HTTP_DATA, mjs_data);
-            }
+            } else
+                stdi_setProtectedProperty(mjs, mjs_response, HTTP_DATA, mjs_mk_undefined());
 
-            if ((received == 0) || (response.content_type == http_ct_json)) {
-                res = mjs_apply(mjs, NULL, mjs_res_process, config, 1, &mjs_response);
-            }
+            res = mjs_apply(mjs, NULL, mjs_res_process, config, 1, &mjs_response);
         }
     } else
         res = MJS_INTERNAL_ERROR;
@@ -1003,7 +1046,7 @@ static void thingjsHTTPRequest(struct mjs *mjs) {
             if (MJS_OK != thingjsHTTPApplyTimeout(&context))
                 goto on_socket_error;
 
-            thingjsHTTPParseResponse(mjs, config, &context);
+            result = thingjsHTTPParseResponse(mjs, config, &context);
 
             if (context.connect)
                 close(context.connect);
