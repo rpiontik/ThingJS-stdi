@@ -56,6 +56,7 @@ Syntax
 ```text
 void clearTimeout(handle)
 ```
+
 Example
 ```js
 let timer = $res.timers.setTimeout(function(){
