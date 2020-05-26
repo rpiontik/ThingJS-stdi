@@ -1,6 +1,7 @@
 # ThingJS http interface
 
-HTTP client for the ThingJS platform
+HTTP client for the ThingJS platform.
+Based in axios specification.
 
 ## Features
 
@@ -27,7 +28,7 @@ These are the available config options for making requests. Only the `url` is re
   method: M_GET, // default
 
   // `headers` are custom headers to be sent
-  headers: {'X-Requested-With': 'XMLHttpRequest'},
+  headers: {'X-Requested-With': 'ThingsJS'},
 
   // `params` are the URL parameters to be sent with the request
   // Must be a plain object or a URLSearchParams object
@@ -54,15 +55,28 @@ These are the available config options for making requests. Only the `url` is re
     return 'Country=Brasil&City=Belo Horizonte';
   },
 
+  // Complex multipart/form-data
+  // method post
+  data: {
+    file1: {
+        headers: {
+            'Content-Disposition:': 'form-data; name="file"; filename="sample.txt"',
+            'Content-Type': 'text/plain'
+        },
+        // Simple data 
+        data: 'File content'
+        // also alternative to send data by function
+        data: function() {
+            return 'File content';
+        }          
+    }
+  },
+
   // `timeout` specifies the number of milliseconds before the request times out.
   // If the request takes longer than `timeout`, the request will be aborted.
   timeout: 1000, // default is `1000` (no timeout)
 
   // `auth` indicates that HTTP Basic auth should be used, and supplies credentials.
-  // This will set an `Authorization` header, overwriting any existing
-  // `Authorization` custom headers you have set using `headers`.
-  // Please note that only HTTP Basic auth is configurable through this parameter.
-  // For Bearer tokens and such, use `Authorization` custom headers instead.
   auth: {
     username: 'user',
     password: 'password'
@@ -170,6 +184,28 @@ $res.http.request({
 });
 ```
 
+### JSON chunked request
+```js
+$res.http.request({
+    url: 'http://website.me/',
+    method: $res.http.M_POST,
+    content_type: $res.http.CT_JSON,
+    transfer_encoding: $res.http.TE_CHUNKED,
+    index: 0,
+    data: function () {
+        this.index++;
+        if (this.index < 10) {
+            return {index: this.index};
+        } else {
+            return;
+        }
+    }
+}, function (response) {
+    print('status:', response.code);
+    return false;
+});
+```
+
 ### Complex multipart/form-data request
 ```js
 $res.http.request({
@@ -205,11 +241,11 @@ $res.http.request({
                 'Content-Type': 'text/plain'
             },
             data: function() {
-            this.index2++;
-            if(this.index2 < 100)
-                return '|long text file|'
-            else
-                return;
+                this.index2++;
+                if(this.index2 < 100)
+                    return '|long text file|'
+                else
+                    return;
             }                      
          }
     }   
@@ -218,29 +254,6 @@ $res.http.request({
     return false;
 });
 ```
-
-### JSON chunked request
-```js
-$res.http.request({
-    url: 'http://website.me/',
-    method: $res.http.M_POST,
-    content_type: $res.http.CT_JSON,
-    transfer_encoding: $res.http.TE_CHUNKED,
-    index: 0,
-    data: function () {
-        this.index++;
-        if (this.index < 10) {
-            return {index: this.index};
-        } else {
-            return;
-        }
-    }
-}, function (response) {
-    print('status:', response.code);
-    return false;
-});
-```
-
 
 # Licensing
 
