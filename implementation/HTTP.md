@@ -33,6 +33,12 @@ These are the available config options for making requests. Only the `url` is re
   // `headers` are custom headers to be sent
   headers: {'X-Requested-With': 'ThingsJS'},
 
+  // Available: CT_JSON, CT_TEXT, CT_FORM_URLENCODED, CT_MULTIPART_FORM_DATA, string (custom)
+  content_type: CT_FORM_URLENCODED, // default
+
+  // Available: TE_NONE, TE_CHUNKED, string (custom)
+  transfer_encoding: TE_NONE, // default
+
   // `params` are the URL parameters to be sent with the request
   // Must be a plain object or a URLSearchParams object
   params: {
