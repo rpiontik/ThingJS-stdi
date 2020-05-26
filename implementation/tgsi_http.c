@@ -18,6 +18,7 @@
 #include "sdti_utils.h"
 #include "thingjs_board.h"
 #include "thingjs_core.h"
+#include "esp_tls.h"
 
 #define  INTERFACE_NAME "http"
 
@@ -55,14 +56,9 @@ const char HTTP_CONTENT_TYPE_JSON[] = "application/json";
 
 #define APPNAME pcTaskGetTaskName(NULL)
 
-#define SWRITEP_(buffer, length) if(0 > write(context->connect, buffer, length)) return MJS_INTERNAL_ERROR;
-#define SWRITEP(buffer, length) {fprintf(stdout, "%.*s", length, (char*)buffer); if(0 > write(context->connect, buffer, length)) return MJS_INTERNAL_ERROR;}
-#define SWRITEP_RES(buffer, length) {fprintf(stdout, "%.*s", length, (char*)buffer); if(0 > write(context->connect, buffer, length)) res = MJS_INTERNAL_ERROR;}
-#define SWRITES_(buffer, length) if(0 > write(context.connect, buffer, length)) goto on_socket_error;
-#define SWRITES(buffer, length) {fprintf(stdout, "%.*s", length, (char*)buffer); if(0 > write(context.connect, buffer, length)) goto on_socket_error;}
-
-#define SWRITE__(buffer, length) fprintf(stdout, "%.*s", length, (char*)buffer);
-#define SWRITE_(buffer, length) {};
+#define SWRITEP(buffer, length) if(MJS_OK != thingjsHTTPWrite(buffer, length, context)) return MJS_INTERNAL_ERROR;
+#define SWRITEP_RES(buffer, length) res = thingjsHTTPWrite(buffer, length, context);
+#define SWRITES(buffer, length) if(MJS_OK != thingjsHTTPWrite(buffer, length, &context)) goto on_socket_error;
 
 typedef enum {
     http_get = 0,
@@ -126,6 +122,11 @@ struct st_http_response {
 
 struct st_http_context {
     const char *uri;
+    int timeout;
+    bool use_ssl;
+    bool is_debug;
+    int connect;
+    struct esp_tls *tls;
     struct mg_str scheme;
     struct mg_str user_info;
     struct mg_str host;
@@ -133,52 +134,111 @@ struct st_http_context {
     struct mg_str query;
     struct mg_str fragment;
     unsigned int port;
-    int timeout;
-    bool use_ssl;
     http_method_type method;
     mjs_val_t custom_method;
     http_content_type content_type;
     mjs_val_t custom_content_type;
     http_transfer_encoding transfer_encoding;
     mjs_val_t custom_transfer_encoding;
-    int connect;
     size_t content_length;
 };
 
-static int thingjsHTTPConnect(struct mg_str host, unsigned int port) {
-    const struct addrinfo hints = {
-            .ai_family = AF_INET,
-            .ai_socktype = SOCK_STREAM,
-    };
+static mjs_err_t thingjsHTTPConnect(struct st_http_context *context) {
+    if(context->use_ssl) {
+        esp_tls_cfg_t cfg = {
+                .timeout_ms = context->timeout
+        };
 
-    struct addrinfo *res;
-    int soc;
+        context->tls = esp_tls_init();
+        if (!context->tls) return MJS_INTERNAL_ERROR;
 
-    char *c_host = malloc(host.len + 1);
-    snprintf(c_host, host.len + 1, "%.*s", (int) host.len, host.p);
+        if (esp_tls_conn_new_sync(context->host.p, context->host.len, context->port, &cfg, context->tls) != 1)
+            return MJS_INTERNAL_ERROR;
+    } else {
+        const struct addrinfo hints = {
+                .ai_family = AF_INET,
+                .ai_socktype = SOCK_STREAM,
+        };
 
-    char c_port[16];
-    snprintf(c_port, 16, "%d", port);
+        struct addrinfo *res;
 
-    int err = getaddrinfo(c_host, c_port, &hints, &res);
+        char *c_host = malloc(context->host.len + 1);
+        snprintf(c_host, context->host.len + 1, "%.*s", (int) context->host.len, context->host.p);
 
-    free(c_host);
+        char c_port[16];
+        snprintf(c_port, 16, "%d", context->port);
 
-    if (err != 0 || res == NULL)
-        return 0;
+        int err = getaddrinfo(c_host, c_port, &hints, &res);
 
-    soc = socket(res->ai_family, res->ai_socktype, 0);
-    if (soc < 0)
-        return 0;
+        free(c_host);
 
-    if (connect(soc, res->ai_addr, res->ai_addrlen) != 0) {
-        close(soc);
+        if (err != 0 || res == NULL)
+            return MJS_INTERNAL_ERROR;
+
+        context->connect = socket(res->ai_family, res->ai_socktype, 0);
+        if (context->connect < 0)
+            return MJS_INTERNAL_ERROR;
+
+        if (connect(context->connect, res->ai_addr, res->ai_addrlen) != 0) {
+            close(context->connect);
+            context->connect = 0;
+            freeaddrinfo(res);
+            return MJS_INTERNAL_ERROR;
+        }
+
+        struct timeval receiving_timeout;
+        receiving_timeout.tv_sec = (int) (context->timeout / 1000);
+        receiving_timeout.tv_usec = context->timeout % 1000;
+        setsockopt(context->connect, SOL_SOCKET, SO_RCVTIMEO, &receiving_timeout, sizeof(receiving_timeout));
+
         freeaddrinfo(res);
-        return 0;
     }
-    freeaddrinfo(res);
+    return MJS_OK;
+}
 
-    return soc;
+static void thingjsHTTPClose(struct st_http_context *context) {
+    if(context->use_ssl && context->tls) {
+        esp_tls_conn_delete(context->tls);
+        context->tls = NULL;
+    } else if(context->connect > 0) {
+        close(context->connect);
+        context->connect = 9;
+    }
+}
+
+static mjs_err_t thingjsHTTPWrite(const char * buffer, size_t size, struct st_http_context *context) {
+    if(context->use_ssl) {
+        size_t written_bytes = 0;
+        do {
+            const char * offset = buffer + written_bytes;
+            size_t length = size - written_bytes;
+            ssize_t ret = esp_tls_conn_write(context->tls, offset, length);
+            if (ret >= 0) {
+                if(context->is_debug)
+                    fprintf(stdout, "%.*s", length, offset);
+                written_bytes += ret;
+            } else
+                return MJS_INTERNAL_ERROR;
+        } while(written_bytes < size);
+    } else {
+        if(0 > write(context->connect, buffer, size))
+            return MJS_INTERNAL_ERROR;
+        else if(context->is_debug)
+            fprintf(stdout, "%.*s", size, buffer);
+    }
+    return MJS_OK;
+}
+
+static mjs_err_t thingjsHTTPRead(char * buffer, size_t size, struct st_http_context *context) {
+    size_t res = 0;
+    if(context->use_ssl) {
+        res = esp_tls_conn_read(context->tls, buffer, size);
+    } else
+        res = read(context->connect, buffer, size);
+
+    if(context->is_debug && (res > 0))
+        fprintf(stdout, "%.*s", res, buffer);
+    return res;
 }
 
 static mjs_err_t thingjsHTTPParseURI(struct mjs *mjs, mjs_val_t config, struct st_http_context *context) {
@@ -414,10 +474,10 @@ static mjs_err_t thingjsHTTPAppendAuth(struct mjs *mjs, mjs_val_t config, struct
             SWRITEP("Authorization: Basic ", 21);
 
             int auth_len = snprintf(http_buffer, HTTP_BUFFER_LENGTH, "%s:%s", username, password);
-            unsigned char *auth_base64 = (unsigned char *) &http_buffer[auth_len + 1];
+            char *auth_base64 = &http_buffer[auth_len + 1];
 
             size_t secret_len = 0;
-            mbedtls_base64_encode(auth_base64, HTTP_BUFFER_LENGTH - auth_len - 1,
+            mbedtls_base64_encode((unsigned char *) auth_base64, HTTP_BUFFER_LENGTH - auth_len - 1,
                                   &secret_len, (unsigned char *) http_buffer, auth_len);
 
             SWRITEP(auth_base64, secret_len);
@@ -875,7 +935,12 @@ static mjs_err_t thingjsHTTPParseResponse(struct mjs *mjs, mjs_val_t config, str
         int read_count = 0;
         bool r_prev = false;
         do {
-            read_count = read(context->connect, http_buffer, HTTP_BUFFER_LENGTH - 1);
+            read_count = thingjsHTTPRead(http_buffer, HTTP_BUFFER_LENGTH - 1, context);
+
+            if(read_count < 0 ) {
+                res = MJS_INTERNAL_ERROR;
+                break;
+            }
 
             //If config is not have process function, body will ignored
             if (!mjs_is_function(mjs_res_process))
@@ -897,8 +962,6 @@ static mjs_err_t thingjsHTTPParseResponse(struct mjs *mjs, mjs_val_t config, str
                     }
                     break;
                 }
-
-                putchar(http_buffer[i]);
 
                 if (http_buffer[i] == '\r') {
                     r_prev = true;
@@ -980,17 +1043,6 @@ static mjs_err_t thingjsHTTPParseResponse(struct mjs *mjs, mjs_val_t config, str
     return res;
 }
 
-static mjs_err_t thingjsHTTPApplyTimeout(struct st_http_context *context) {
-    struct timeval receiving_timeout;
-    receiving_timeout.tv_sec = (int) (context->timeout / 1000);
-    receiving_timeout.tv_usec = context->timeout % 1000;
-    if (setsockopt(context->connect, SOL_SOCKET, SO_RCVTIMEO, &receiving_timeout,
-                   sizeof(receiving_timeout)) < 0)
-        return MJS_INTERNAL_ERROR;
-    else
-        return MJS_OK;
-}
-
 static void thingjsHTTPRequest(struct mjs *mjs) {
     //Get function params
     mjs_err_t result = MJS_OK;
@@ -1009,8 +1061,10 @@ static void thingjsHTTPRequest(struct mjs *mjs) {
 
     //Parse request params
     if (mjs_is_object(config)) {
-
         struct st_http_context context = {0};
+
+        context.is_debug = mjs_get_bool(mjs, mjs_get(mjs, config, "debug", ~0));
+
         if (
                 (MJS_OK == (result = thingjsHTTPParseURI(mjs, config, &context)))
                 && (MJS_OK == (result = thingjsHTTPParseMethod(mjs, config, &context)))
@@ -1019,11 +1073,8 @@ static void thingjsHTTPRequest(struct mjs *mjs) {
                 && (MJS_OK == (result = thingjsHTTPParseTransferEncoding(mjs, config, &context)))
                 ) {
 
-            //Open socket connection
-            context.connect = thingjsHTTPConnect(context.host, context.port);
-
             if (
-                    !context.connect
+                    (MJS_OK != thingjsHTTPConnect(&context))
                     || (MJS_OK != thingjsHTTPAppendTop(mjs, config, &context))
                     || (MJS_OK != thingjsHTTPAppendHeaders(mjs, config, &context))
                     || (MJS_OK != thingjsHTTPAppendContentType(mjs, config, &context))
@@ -1040,8 +1091,7 @@ static void thingjsHTTPRequest(struct mjs *mjs) {
                     case MJS_INTERNAL_ERROR :
                         goto on_socket_error;
                     default: {
-                        if (context.connect)
-                            close(context.connect);
+                        thingjsHTTPClose(&context);
                         mjs_return(mjs, result);
                         return;
                     };
@@ -1051,22 +1101,17 @@ static void thingjsHTTPRequest(struct mjs *mjs) {
                 SWRITES(CLRF, 2);
             }
 
-            if (MJS_OK != thingjsHTTPApplyTimeout(&context))
-                goto on_socket_error;
-
             result = thingjsHTTPParseResponse(mjs, config, &context);
 
-            if (context.connect)
-                close(context.connect);
+            thingjsHTTPClose(&context);
         }
 
         mjs_return(mjs, result);
         return;
-        on_socket_error:
+on_socket_error:
         //todo NEED ERROR CALLBACK
         ESP_LOGD(TAG_HTTP, "Cannot open connection with [%s]", context.uri);
-        if (context.connect)
-            close(context.connect);
+        thingjsHTTPClose(&context);
         mjs_return(mjs, MJS_OK);
     } else {
         mjs_set_errorf(mjs, MJS_INTERNAL_ERROR, "%s/%s: Incorrect params of function request", APPNAME, TAG_HTTP);

@@ -26,6 +26,9 @@ These are the available config options for making requests. Only the `url` is re
   // Available: M_GET, M_HEAD, M_POST, M_PUT, M_DELETE, M_CONNECT, M_OPTIONS, M_TRACE, M_PATCH
   // and custom methods  
   method: M_GET, // default
+  
+  // Set true for trace traffic to stdout
+  debug: true,
 
   // `headers` are custom headers to be sent
   headers: {'X-Requested-With': 'ThingsJS'},
