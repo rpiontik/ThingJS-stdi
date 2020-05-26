@@ -2,7 +2,7 @@
 
 Provided timer functions.
 
-## setInterval
+## setInterval()
 The setInterval() method calls a function at specified intervals (in milliseconds).
 It method will continue calling the function until clearInterval() is called.
 
@@ -17,7 +17,7 @@ $res.timers.setInterval(function(param){
 }, 3000, "Hello!");
 ```
 
-## clearInterval
+## clearInterval()
 The clearInterval() method clears a timer set with the setInterval() method. 
 
 Syntax
@@ -34,7 +34,7 @@ let timer = $res.timers.setInterval(function(){
 }, 1000);
 ```
 
-## setTimeout
+## setTimeout()
 The setTimeout() method calls a function after a specified number of milliseconds.
 The function is only executed once. If you need to repeat execution, use the setInterval() method.
 
@@ -49,7 +49,7 @@ $res.timers.setTimeout(function(){
 }, 1000);
 ```
 
-## clearTimeout
+## clearTimeout()
 The clearTimeout() method clears a timer set with the setTimeout() method. 
 
 Syntax
