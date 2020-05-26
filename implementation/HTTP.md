@@ -1,6 +1,6 @@
 # ThingJS http interface
 
-HTTP client for the ThingJS platform.
+HTTP/HTTPS client for the ThingJS platform.
 Based in axios specification.
 
 ## Features
