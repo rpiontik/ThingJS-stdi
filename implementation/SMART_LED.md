@@ -82,7 +82,7 @@ for(let i = 0; i < $res.ledc1.channels.length; i++) {
 ```js
   "requires": {
     "interfaces": {
-      "ledc1": { // Will available as $res.ledc1
+      "ledc1": { // Will be available as $res.ledc1
         "type": "SmartLED", // Interface id
         "required": true / false,
         "description": {
@@ -90,7 +90,7 @@ for(let i = 0; i < $res.ledc1.channels.length; i++) {
           "en": "Main LEDC driver"
         }
       },
-      "ledc2": { // Will available as $res.ledc2
+      "ledc2": { // Will be available as $res.ledc2
         "type": "SmartLED", // Interface id
         "required": false / false,
         "description": {

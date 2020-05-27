@@ -72,7 +72,7 @@ print('Available GPIO', $res.blink.gpio);
 ```js
   "requires": {
     "interfaces": {
-      "blink": { // Will available as $res.blink
+      "blink": { // Will be available as $res.blink
         "type": "bit_port", // Interface id
         "required": true / false,
         "description": { // Description for user

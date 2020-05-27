@@ -267,7 +267,7 @@ $res.http.request({
 ```js
   "requires": {
     "interfaces": {
-      "http": { // Will available as $res.http
+      "http": { // Will be available as $res.http
         "type": "http", //Interface id
         "required": true / false,
         "description": { // Description for user

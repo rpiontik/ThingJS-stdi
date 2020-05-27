@@ -34,7 +34,7 @@ $res.timers.setInterval(function () {
 ```js
   "requires": {
     "interfaces": {
-      "clock": { // Will available as $res.clock
+      "clock": { // Will be available as $res.clock
         "type": "clock", // Interface id
         "required": true / false,
         "description": {
