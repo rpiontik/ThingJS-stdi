@@ -65,6 +65,26 @@ let timer = $res.timers.setTimeout(function(){
 clearTimeout(timer);
 ```
 
+# Manifest requires
+```js
+  "requires": {
+    "interfaces": {
+      "timers": { // Will available as $res.timers
+        "type": "timers",
+        "required": true / false,
+        "description": { // Description for user
+          "ru": "Таймеры",
+          "en": "Timers"
+        }
+      }
+    }
+  }
+```
+
+#Files
+1. tgsi_timer.h
+2. tgsi_timer.c
+2. TIMER.md
 
 # Licensing
 

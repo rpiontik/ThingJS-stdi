@@ -65,6 +65,28 @@ Example
 print('Available GPIO', $res.blink.gpio);
 ```
 
+# Manifest requires
+```js
+  "requires": {
+    "interfaces": {
+      "blink": { // Will available as $res.blink
+        "type": "bit_port", // Interface id
+        "required": true / false,,
+        "description": { // Description for user
+          "ru": "LED индикатор",
+          "en": "LED indicator"
+        }
+      }
+    }
+  }
+```
+
+#Files
+1. tgsi_bit_port.h
+2. tgsi_bit_port.c
+2. BIT_PORT.md
+
+
 # Licensing
 
 ThingsJS is released under

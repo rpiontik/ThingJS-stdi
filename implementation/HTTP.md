@@ -1,7 +1,7 @@
 # ThingJS http interface
 
 HTTP/HTTPS client for the ThingJS platform.
-Based in axios specification.
+Based on axios specification.
 
 ## Features
 
@@ -40,7 +40,6 @@ These are the available config options for making requests. Only the `url` is re
   transfer_encoding: TE_NONE, // default
 
   // `params` are the URL parameters to be sent with the request
-  // Must be a plain object or a URLSearchParams object
   params: {
     ID: 12345
   },
@@ -263,6 +262,27 @@ $res.http.request({
     return false;
 });
 ```
+
+# Manifest requires
+```js
+  "requires": {
+    "interfaces": {
+      "http": { // Will available as $res.http
+        "type": "http", //Interface id
+        "required": true / false,
+        "description": { // Description for user
+          "ru": "Интернет-запросы",
+          "en": "Internet requests"
+        }
+      }
+    }
+  }
+```
+
+#Files
+1. tgsi_http.h
+2. tgsi_http.c
+2. HTTP.md
 
 # Licensing
 
