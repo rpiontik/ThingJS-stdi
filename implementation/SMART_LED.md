@@ -102,6 +102,9 @@ for(let i = 0; i < $res.ledc1.channels.length; i++) {
   }
 ```
 
+# Sample application
+[Lucerna](https://github.com/rpiontik/ThingJS-front/tree/master/src/applications/lucerna) LED Controller for aquarium 
+
 # Files
 1. tgsi_smart_led.h
 2. tgsi_smart_led.c

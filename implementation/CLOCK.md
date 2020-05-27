@@ -51,6 +51,8 @@ $res.timers.setInterval(function () {
 2. tgsi_clock.c
 2. BIT_CLOCK.md
 
+# Sample application
+[Lucerna](https://github.com/rpiontik/ThingJS-front/tree/master/src/applications/lucerna) LED Controller for aquarium 
 
 # Licensing
 
