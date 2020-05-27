@@ -12,11 +12,11 @@ git submodule add git@github.com:rpiontik/ThingJS-stdi.git components/thingjs_st
 * ThingJS-core (https://github.com/rpiontik/ThingJS-core)
 
 # Package includes
-1. [clock](/implementation/CLOCK.md)
-2. [bit_port](/implementation/BIT_PORT.md)
-3. [HTTP](/implementation/HTTP.md)
-4. [DS3231](/implementation/DS3231.md)
-5. [SmartLED](/implementation/SMART_LED.md)
+1. [clock](/implementation/CLOCK.md) - Provide internal clock functions;
+2. [bit_port](/implementation/BIT_PORT.md) - Provide GPIO configuration functions;
+3. [HTTP](/implementation/HTTP.md) - HTTP/HTTPS client;
+4. [DS3231](/implementation/DS3231.md) - Provide RTC functions for chip ds3231 and compatible;
+5. [SmartLED](/implementation/SMART_LED.md) - Smart LED interface.
 
 # Licensing
 
