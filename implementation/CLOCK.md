@@ -3,7 +3,7 @@
 Provide internal clock functions.
 
 ## setTime()
-Epoch (unix time) that specifies the time that you want to set. Timezone must to include. 
+Epoch (unix time) that specifies the time that you want to set. Timezone must be included. 
 
 Syntax
 ```text
@@ -25,9 +25,7 @@ epoch getTime(void)
 
 Example
 ```js
-$res.timers.setInterval(function () {
-    print($res.clock.getTime());
-}, 1000);
+$res.rtc.sync();
 ```
 
 # Manifest requires
