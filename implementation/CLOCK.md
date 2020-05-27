@@ -25,7 +25,9 @@ epoch getTime(void)
 
 Example
 ```js
-$res.rtc.sync();
+$res.timers.setInterval(function () {
+    print($res.clock.getTime());
+}, 1000);
 ```
 
 # Manifest requires
