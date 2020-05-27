@@ -1,4 +1,4 @@
-# ThingJS internal clock interface
+# ThingJS Smart LED controller interface
 
 The Smart LED interface peripheral is primarily designed to control the intensity of LEDs,
 although it can also be used to generate PWM signals for other purposes as well.
