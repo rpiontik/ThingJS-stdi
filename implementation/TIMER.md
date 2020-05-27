@@ -1,6 +1,6 @@
 # ThingJS timer interface
 
-Provided timer functions.
+Provide timer functions.
 
 ## setInterval()
 The setInterval() method calls a function at specified intervals (in milliseconds).

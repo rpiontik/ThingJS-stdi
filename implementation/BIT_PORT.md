@@ -1,6 +1,6 @@
 # ThingJS GPIO input/output interface
 
-Provided GPIO configuration functions.
+Provide GPIO configuration functions.
 
 ## direction()
 GPIO set direction. Configure GPIO direction.
@@ -74,7 +74,7 @@ print('Available GPIO', $res.blink.gpio);
     "interfaces": {
       "blink": { // Will available as $res.blink
         "type": "bit_port", // Interface id
-        "required": true / false,,
+        "required": true / false,
         "description": { // Description for user
           "ru": "LED индикатор",
           "en": "LED indicator"
