@@ -24,6 +24,7 @@ $res.blink.direction($res.blink.DIR_MODE_OUTPUT);
 
 ## set()
 Set the RTC IO output level.
+
 Syntax
 ```text
 void set(bool)
@@ -41,6 +42,7 @@ $res.timers.setInterval(function () {
 
 ## get()
 GPIO get input level.
+
 Syntax
 ```text
 bool get(void)
@@ -60,6 +62,7 @@ $res.timers.setInterval(function () {
 
 ## gpio
 Property contain GPIO number.
+
 Example
 ```js
 print('Available GPIO', $res.blink.gpio);
