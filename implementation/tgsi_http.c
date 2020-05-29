@@ -37,6 +37,7 @@ const char HTTP_AUTH[] = "auth";
 const char HTTP_AUTH_USERNAME[] = "username";
 const char HTTP_AUTH_PASSWORD[] = "password";
 const char HTTP_EVT_RESPONSE_PROCESS[] = "onResponseProcess";
+const char HTTP_EVT_RESPONSE_ERROR[] = "onError";
 
 const char CLRF[] = "\r\n";
 
@@ -53,6 +54,12 @@ const char HTTP_CONTENT_BOUNDARY_HEADER_POSTFIX[] = "\"\r\n";
 const char HTTP_CONTENT_BOUNDARY_CLOSE[] = "--tjs-boundary--\r\n";
 const char HTTP_CONTENT_TYPE_TEXT[] = "text/plain";
 const char HTTP_CONTENT_TYPE_JSON[] = "application/json";
+
+
+const char HTTP_ERROR_ECONNREFUSED[] = "ECONNREFUSED";
+const char HTTP_ERROR_ECONNRESET[] = "ECONNRESET";
+const char HTTP_ERROR_ETIMEDOUT[] = "ETIMEDOUT";
+
 
 #define APPNAME pcTaskGetTaskName(NULL)
 
@@ -141,10 +148,11 @@ struct st_http_context {
     http_transfer_encoding transfer_encoding;
     mjs_val_t custom_transfer_encoding;
     size_t content_length;
+    const char *err_stage;
 };
 
 static mjs_err_t thingjsHTTPConnect(struct st_http_context *context) {
-    if(context->use_ssl) {
+    if (context->use_ssl) {
         esp_tls_cfg_t cfg = {
                 .timeout_ms = context->timeout
         };
@@ -197,46 +205,47 @@ static mjs_err_t thingjsHTTPConnect(struct st_http_context *context) {
 }
 
 static void thingjsHTTPClose(struct st_http_context *context) {
-    if(context->use_ssl && context->tls) {
+    if (context->use_ssl && context->tls) {
         esp_tls_conn_delete(context->tls);
         context->tls = NULL;
-    } else if(context->connect > 0) {
+    } else if (context->connect > 0) {
         close(context->connect);
         context->connect = 9;
     }
 }
 
-static mjs_err_t thingjsHTTPWrite(const char * buffer, size_t size, struct st_http_context *context) {
-    if(context->use_ssl) {
+static mjs_err_t thingjsHTTPWrite(const char *buffer, size_t size, struct st_http_context *context) {
+    context->err_stage = HTTP_ERROR_ECONNRESET;
+    if (context->use_ssl) {
         size_t written_bytes = 0;
         do {
-            const char * offset = buffer + written_bytes;
+            const char *offset = buffer + written_bytes;
             size_t length = size - written_bytes;
             ssize_t ret = esp_tls_conn_write(context->tls, offset, length);
             if (ret >= 0) {
-                if(context->is_debug)
+                if (context->is_debug)
                     fprintf(stdout, "%.*s", length, offset);
                 written_bytes += ret;
             } else
                 return MJS_INTERNAL_ERROR;
-        } while(written_bytes < size);
+        } while (written_bytes < size);
     } else {
-        if(0 > write(context->connect, buffer, size))
+        if (0 > write(context->connect, buffer, size))
             return MJS_INTERNAL_ERROR;
-        else if(context->is_debug)
+        else if (context->is_debug)
             fprintf(stdout, "%.*s", size, buffer);
     }
     return MJS_OK;
 }
 
-static mjs_err_t thingjsHTTPRead(char * buffer, size_t size, struct st_http_context *context) {
+static mjs_err_t thingjsHTTPRead(char *buffer, size_t size, struct st_http_context *context) {
     size_t res = 0;
-    if(context->use_ssl) {
+    if (context->use_ssl) {
         res = esp_tls_conn_read(context->tls, buffer, size);
     } else
         res = read(context->connect, buffer, size);
 
-    if(context->is_debug && (res > 0))
+    if (context->is_debug && (res > 0))
         fprintf(stdout, "%.*s", res, buffer);
     return res;
 }
@@ -338,7 +347,8 @@ static mjs_err_t thingjsHTTPAppendTop(struct mjs *mjs, mjs_val_t config, struct 
                            context->method == http_custom
                            ? mjs_get_cstring(mjs, &context->custom_method)
                            : methods[context->method].name,
-                           (int) context->path.len, context->path.p
+                           context->path.len ? (int) context->path.len : 1,
+                           context->path.len ? context->path.p : "/"
         );
         SWRITEP(http_buffer, len);
 
@@ -749,7 +759,7 @@ thingjsHTTPAppendDataObject(struct mjs *mjs, mjs_val_t config, mjs_val_t data, s
                 is_first = false;
             }
 
-            if((MJS_OK == res) && (MJS_OK == (res = thingjsHTTPMbufFlushChunked(&mb, context)))) {
+            if ((MJS_OK == res) && (MJS_OK == (res = thingjsHTTPMbufFlushChunked(&mb, context)))) {
                 if (context->transfer_encoding == http_te_chunked) {
                     thingjsHTTPAppendChunk(context, "", 0);
                 } else {
@@ -937,7 +947,7 @@ static mjs_err_t thingjsHTTPParseResponse(struct mjs *mjs, mjs_val_t config, str
         do {
             read_count = thingjsHTTPRead(http_buffer, HTTP_BUFFER_LENGTH - 1, context);
 
-            if(read_count < 0 ) {
+            if (read_count < 0) {
                 res = MJS_INTERNAL_ERROR;
                 break;
             }
@@ -1059,6 +1069,11 @@ static void thingjsHTTPRequest(struct mjs *mjs) {
         stdi_setProtectedProperty(mjs, config, HTTP_EVT_RESPONSE_PROCESS, on_res_process);
     }
 
+    mjs_val_t on_error = mjs_arg(mjs, 2);
+    if (mjs_is_function(on_error)) {
+        stdi_setProtectedProperty(mjs, config, HTTP_EVT_RESPONSE_ERROR, on_error);
+    }
+
     //Parse request params
     if (mjs_is_object(config)) {
         struct st_http_context context = {0};
@@ -1073,9 +1088,14 @@ static void thingjsHTTPRequest(struct mjs *mjs) {
                 && (MJS_OK == (result = thingjsHTTPParseTransferEncoding(mjs, config, &context)))
                 ) {
 
+            context.err_stage = HTTP_ERROR_ECONNREFUSED;
+            if (MJS_OK != thingjsHTTPConnect(&context))
+                goto on_socket_error;
+
+            context.err_stage = HTTP_ERROR_ECONNRESET;
+
             if (
-                    (MJS_OK != thingjsHTTPConnect(&context))
-                    || (MJS_OK != thingjsHTTPAppendTop(mjs, config, &context))
+                    (MJS_OK != thingjsHTTPAppendTop(mjs, config, &context))
                     || (MJS_OK != thingjsHTTPAppendHeaders(mjs, config, &context))
                     || (MJS_OK != thingjsHTTPAppendContentType(mjs, config, &context))
                     || (MJS_OK != thingjsHTTPAppendTransferEncoding(mjs, &context))
@@ -1101,7 +1121,9 @@ static void thingjsHTTPRequest(struct mjs *mjs) {
                 SWRITES(CLRF, 2);
             }
 
-            result = thingjsHTTPParseResponse(mjs, config, &context);
+            context.err_stage = HTTP_ERROR_ETIMEDOUT;
+            if (MJS_INTERNAL_ERROR == (result = thingjsHTTPParseResponse(mjs, config, &context)))
+                goto on_socket_error;
 
             thingjsHTTPClose(&context);
         }
@@ -1109,10 +1131,17 @@ static void thingjsHTTPRequest(struct mjs *mjs) {
         mjs_return(mjs, result);
         return;
 on_socket_error:
-        //todo NEED ERROR CALLBACK
-        ESP_LOGD(TAG_HTTP, "Cannot open connection with [%s]", context.uri);
         thingjsHTTPClose(&context);
-        mjs_return(mjs, MJS_OK);
+        ESP_LOGD(TAG_HTTP, "Cannot open connection with [%s]", context.uri);
+        result = MJS_OK;
+        on_error = mjs_get(mjs, config, HTTP_EVT_RESPONSE_ERROR, ~0);
+        if (mjs_is_function(on_error)) {
+            mjs_val_t mjs_error = mjs_mk_object(mjs);
+            stdi_setProtectedProperty(mjs, mjs_error, "code", mjs_mk_string(mjs, context.err_stage, ~0, false));
+            stdi_setProtectedProperty(mjs, mjs_error, "message", mjs_mk_string(mjs, "Error connection", ~0, false));
+            result = mjs_apply(mjs, NULL, on_error, config, 1, &mjs_error);
+        }
+        mjs_return(mjs, result);
     } else {
         mjs_set_errorf(mjs, MJS_INTERNAL_ERROR, "%s/%s: Incorrect params of function request", APPNAME, TAG_HTTP);
         mjs_return(mjs, MJS_INTERNAL_ERROR);

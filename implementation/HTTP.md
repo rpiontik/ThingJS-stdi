@@ -82,7 +82,7 @@ These are the available config options for making requests. Only the `url` is re
 
   // `timeout` specifies the number of milliseconds before the request times out.
   // If the request takes longer than `timeout`, the request will be aborted.
-  timeout: 1000, // default is `1000` (no timeout)
+  timeout: 10000, // default is `10000` (no timeout)
 
   // `auth` indicates that HTTP Basic auth should be used, and supplies credentials.
   auth: {
