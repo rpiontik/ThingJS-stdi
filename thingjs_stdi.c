@@ -5,12 +5,18 @@
 
 #include "thingjs_stdi.h"
 
-#include "implementation/tgsi_1wire.h"
-#include "implementation/tgsi_ledc.h"
 #include "implementation/tgsi_bit_port.h"
+#include "implementation/tgsi_timer.h"
+#include "implementation/tgsi_clock.h"
+#include "implementation/tgsi_ds3231.h"
+#include "implementation/tgsi_smart_led.h"
+#include "implementation/tgsi_http.h"
 
 void thingjsSTDIRegister(void) {
-    thingjs1WireRegister();
-    thingjsLEDCRegister();
     thingjsBitPortRegister();
+    thingjsTimersRegister();
+    thingjsClockRegister();
+    thingjsDS3231Register();
+    thingjsSmartLEDRegister();
+    thingjsHTTPRegister();
 }
