@@ -98,8 +98,9 @@ mjs_val_t thingjsBitPortConstructor(struct mjs *mjs, cJSON *params) {
 
     //Consts
     stdi_setProtectedProperty(mjs, interface, "DIR_MODE_DISABLE", mjs_mk_number(mjs, GPIO_MODE_DISABLE));
-    stdi_setProtectedProperty(mjs, interface, "DIR_MODE_DEF_INPUT", mjs_mk_number(mjs, GPIO_MODE_DEF_INPUT));
-    stdi_setProtectedProperty(mjs, interface, "DIR_MODE_DEF_OUTPUT", mjs_mk_number(mjs, GPIO_MODE_DEF_OUTPUT));
+    stdi_setProtectedProperty(mjs, interface, "DIR_MODE_INPUT", mjs_mk_number(mjs, GPIO_MODE_INPUT));
+    stdi_setProtectedProperty(mjs, interface, "DIR_MODE_OUTPUT", mjs_mk_number(mjs, GPIO_MODE_OUTPUT));
+    stdi_setProtectedProperty(mjs, interface, "DIR_MODE_OUTPUT_OD", mjs_mk_number(mjs, GPIO_MODE_OUTPUT_OD));
     stdi_setProtectedProperty(mjs, interface, "DIR_MODE_INPUT_OUTPUT_OD", mjs_mk_number(mjs, GPIO_MODE_INPUT_OUTPUT_OD));
     stdi_setProtectedProperty(mjs, interface, "DIR_MODE_INPUT_OUTPUT", mjs_mk_number(mjs, GPIO_MODE_INPUT_OUTPUT));
 

@@ -210,7 +210,7 @@ mjs_val_t thingjsDS3231Constructor(struct mjs *mjs, cJSON *params) {
     //Create mjs object
     mjs_val_t interface = mjs_mk_object(mjs);
 
-    //Create timers collection
+    //Bind pins
     stdi_setProtectedProperty(mjs, interface, "$sda", mjs_mk_number(mjs, sda->valueint));
     stdi_setProtectedProperty(mjs, interface, "$scl", mjs_mk_number(mjs, scl->valueint));
 

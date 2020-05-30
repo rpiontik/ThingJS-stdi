@@ -10,6 +10,7 @@
 #include "implementation/tgsi_clock.h"
 #include "implementation/tgsi_ds3231.h"
 #include "implementation/tgsi_smart_led.h"
+#include "implementation/tgsi_http.h"
 
 void thingjsSTDIRegister(void) {
     thingjsBitPortRegister();
@@ -17,4 +18,5 @@ void thingjsSTDIRegister(void) {
     thingjsClockRegister();
     thingjsDS3231Register();
     thingjsSmartLEDRegister();
+    thingjsHTTPRegister();
 }
