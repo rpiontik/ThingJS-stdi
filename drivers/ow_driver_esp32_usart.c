@@ -26,7 +26,6 @@
  */
 
 #include "ow_driver.h"
-#include "ow_driver_esp32_usart.h"
 
 //#include "freertos/task.h"
 #include "driver/uart.h"
@@ -58,9 +57,8 @@ struct one_wire_driver {
 //struct one_wire_driver one_wire_heap[OW_HEAP_SIZE];
 //static int heap_ptr = 0;
 
-int init_driver(ow_driver_ptr *d, int u)
+int init_driver(ow_driver_ptr *d, int uart, int rx, int tx)
 {
-	uart_port_t uart = (u & UART_MASK) >> 12;
 	if (uart >= UART_NUM_MAX) {
 		return OW_ERR;
 	}
@@ -71,9 +69,6 @@ int init_driver(ow_driver_ptr *d, int u)
 	}
 
 	(*d)->uart = uart;
-	int tx, rx;
-	tx = (u & TX_MASK) >> 6;
-	rx = (u & RX_MASK);
 
 	 uart_config_t uart_config = {
 		.baud_rate = UB_115200,

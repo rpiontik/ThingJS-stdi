@@ -56,12 +56,13 @@ extern "C" {
  * Initializes the One Wire driver.
  *
  * @param a pointer to the driver's structure
- * @param initialization parameter, different for each particular driver.
- *        It might be a pin, GPIO or USART number (starting from 0).
+ * @param UART number.
+ * @param RX GPIO.
+ * @param TX GPIO.
  *
  * @return: 0 if ok, other number in case of error.
  */
-int init_driver(ow_driver_ptr*, int);
+int init_driver(ow_driver_ptr *d, int uart, int rx, int tx);
 
 /**
  * Release resources acquired by the driver. E.g. shutdown hardware
