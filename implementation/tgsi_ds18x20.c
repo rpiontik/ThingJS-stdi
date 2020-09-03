@@ -9,6 +9,7 @@
 #include <freertos/timers.h>
 #include <esp_log.h>
 #include <sys/time.h>
+#include "driver/uart.h"
 
 #include "sdti_utils.h"
 #include "thingjs_board.h"
@@ -111,7 +112,21 @@ mjs_val_t thingjsDS18X20Constructor(struct mjs *mjs, cJSON *params) {
     mjs_val_t interface = mjs_mk_object(mjs);
 
     owu_struct_t * context = malloc(sizeof(owu_struct_t));
-    init_driver(&context->driver, uart->valueint, rx->valueint, tx->valueint);
+    int uart_number = 0;
+    switch (uart->valueint)
+    {
+        case RES_UART_0:
+            uart_number = UART_NUM_0;
+            break;
+        case RES_UART_1:
+            uart_number = UART_NUM_1;
+            break;
+        case RES_UART_2:
+            uart_number = UART_NUM_2;
+            break;
+    }
+    ESP_LOGD(TAG_DS18X20, "UART Number %d", uart_number);
+    init_driver(&context->driver, uart_number, rx->valueint, tx->valueint);
     stdi_setProtectedProperty(mjs, interface, SYS_PROP_CONEXT, mjs_mk_foreign(mjs, context));
 
     //Bind functions
