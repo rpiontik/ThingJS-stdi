@@ -20,6 +20,7 @@
 #include "thingjs_board.h"
 #include "thingjs_core.h"
 #include "esp_tls.h"
+#include "mjs.h"
 
 #define  INTERFACE_NAME "http"
 
