@@ -9,6 +9,7 @@
 #include <freertos/timers.h>
 #include <esp_log.h>
 #include <sys/time.h>
+#include <string.h>
 #include "driver/uart.h"
 
 #include "sdti_utils.h"
@@ -20,6 +21,8 @@
 #include "dallas.h"
 
 #define  INTERFACE_NAME "DS18X20"
+
+#define MOC_DATA
 
 const char TAG_DS18X20[] = INTERFACE_NAME;
 
@@ -39,12 +42,18 @@ static void thingjsDS18X20GetTempC(struct mjs *mjs) {
     mjs_val_t context = mjs_get(mjs, this, SYS_PROP_CONEXT, ~0);
 
     if (mjs_is_object(this) && mjs_is_foreign(context) && mjs_is_string(addr)) {
-        owu_struct_t * wire = mjs_get_ptr(mjs, context);
         uint8_t dev_addr[8] = {0};
+        memcpy(dev_addr, mjs_get_string(mjs, &addr, NULL), 8);
+#ifdef MOC_DATA
+        ESP_LOGD(TAG_DS18X20, "Address [%d,%d,%d,%d,%d,%d,%d,%d]", dev_addr[0], dev_addr[1], dev_addr[2], dev_addr[3],
+                 dev_addr[4], dev_addr[5], dev_addr[6], dev_addr[7]);
+        result = mjs_mk_number(mjs, 32.23);
+#else
+        owu_struct_t * wire = mjs_get_ptr(mjs, context);
         uint8_t scratch_pad[__SCR_LENGTH];
-        xthal_memcpy(dev_addr, mjs_get_string(mjs, &addr, NULL), 8);
         ds_read_scratchpad(wire, dev_addr, scratch_pad);
         result = mjs_mk_number(mjs, ds_get_temp_c(scratch_pad));
+#endif
     } else {
         mjs_set_errorf(mjs, MJS_INTERNAL_ERROR, "%s/%s: %s %s",
                        pcTaskGetTaskName(NULL), TAG_DS18X20, ERR_INCORRECT_PARAMS, FUNC_GET_TEMP_C);
@@ -60,7 +69,9 @@ static void thingjsDS18X20ConvertAll(struct mjs *mjs) {
     mjs_val_t context = mjs_get(mjs, this, SYS_PROP_CONEXT, ~0);
 
     if (mjs_is_object(this) && mjs_is_foreign(context)) {
+#ifndef MOC_DATA
         ds_convert_all(mjs_get_ptr(mjs, context));
+#endif
         mjs_return(mjs, MJS_OK);
     } else {
         mjs_return(mjs, MJS_INTERNAL_ERROR);
@@ -71,17 +82,23 @@ static void thingjsDS18X20Search(struct mjs *mjs) {
     mjs_val_t result = MJS_OK;
     //Get function params
     mjs_val_t func = mjs_arg(mjs, 0);   //Callback function
-    mjs_val_t this = mjs_get_this(mjs); //this interface object
+    mjs_val_t this = mjs_get_this(mjs);    //this interface object
     mjs_val_t context = mjs_get(mjs, this, SYS_PROP_CONEXT, ~0);
 
     if (mjs_is_object(this) && mjs_is_function(func) && mjs_is_foreign(context)) {
         owu_struct_t * wire = mjs_get_ptr(mjs, context);
         owu_reset_search(wire);
+#ifdef MOC_DATA
+        uint8_t dev_addr[8] = {1, 2, 3, 4, 5, 6, 7, 8};
+        mjs_val_t addr = mjs_mk_string(mjs, (char *)dev_addr, 8, true);
+        result = mjs_apply(mjs, NULL, func, MJS_UNDEFINED, 1, &addr);
+#elif
         uint8_t dev_addr[8];
         while((result == MJS_OK) && owu_search(wire, dev_addr)) {
             mjs_val_t addr = mjs_mk_string(mjs, (char *)dev_addr, 8, true);
             result = mjs_apply(mjs, NULL, func, MJS_UNDEFINED, 1, &addr);
         }
+#endif
     } else {
         mjs_set_errorf(mjs, MJS_INTERNAL_ERROR, "%s/%s: %s %s",
                        pcTaskGetTaskName(NULL), TAG_DS18X20, ERR_INCORRECT_PARAMS, FUNC_SEARCH);
@@ -125,7 +142,6 @@ mjs_val_t thingjsDS18X20Constructor(struct mjs *mjs, cJSON *params) {
             uart_number = UART_NUM_2;
             break;
     }
-    ESP_LOGD(TAG_DS18X20, "UART Number %d", uart_number);
     init_driver(&context->driver, uart_number, rx->valueint, tx->valueint);
     stdi_setProtectedProperty(mjs, interface, SYS_PROP_CONEXT, mjs_mk_foreign(mjs, context));
 
