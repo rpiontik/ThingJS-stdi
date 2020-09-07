@@ -22,7 +22,7 @@
 
 #define  INTERFACE_NAME "DS18X20"
 
-#define MOC_DATA
+//#define MOC_DATA
 
 const char TAG_DS18X20[] = INTERFACE_NAME;
 
@@ -92,7 +92,7 @@ static void thingjsDS18X20Search(struct mjs *mjs) {
         uint8_t dev_addr[8] = {1, 2, 3, 4, 5, 6, 7, 8};
         mjs_val_t addr = mjs_mk_string(mjs, (char *)dev_addr, 8, true);
         result = mjs_apply(mjs, NULL, func, MJS_UNDEFINED, 1, &addr);
-#elif
+#else
         uint8_t dev_addr[8];
         while((result == MJS_OK) && owu_search(wire, dev_addr)) {
             mjs_val_t addr = mjs_mk_string(mjs, (char *)dev_addr, 8, true);
