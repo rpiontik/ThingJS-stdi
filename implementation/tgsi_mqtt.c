@@ -14,7 +14,7 @@
 #include "mqtt_client.h"
 #include "esp_tls.h"
 
-#define  INTERFACE_NAME "mqtt"
+#define  INTERFACE_NAME "mqttc"
 #define  SYS_PROP_CLIENT  "$client"
 
 const char TAG_MQTT[] = INTERFACE_NAME;
