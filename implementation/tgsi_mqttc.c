@@ -2,7 +2,7 @@
 // Created by rpiontik on 10.09.20.
 //
 
-#include "tgsi_mqtt.h"
+#include "tgsi_mqttc.h"
 
 #include "freertos/FreeRTOSConfig.h"
 #include "freertos/FreeRTOS.h"
@@ -54,6 +54,9 @@ static void thingjs_mqtt_event_handler(void *handler_args, esp_event_base_t base
     char *event_name = NULL;
     ESP_LOGD(TAG_MQTT, "Event dispatched from event loop base=%s, event_id=%d", base, event_id);
     switch (event->event_id) {
+        case MQTT_EVENT_BEFORE_CONNECT:
+            event_name = "onbeforeconnected";
+            break;
         case MQTT_EVENT_CONNECTED:
             event_name = "onconnected";
             break;
@@ -189,15 +192,11 @@ static void thingjsMQTTConnect(struct mjs *mjs) {
     mjs_val_t result = MJS_OK;
     //Get function params
     mjs_val_t arg0 = mjs_arg(mjs, 0);   //URI
-    mjs_val_t arg1 = mjs_arg(mjs, 1);   //login
-    mjs_val_t arg2 = mjs_arg(mjs, 2);   //password
     mjs_val_t this = mjs_get_this(mjs);    //this interface object
     if (mjs_is_string(arg0) && mjs_is_object(this)) {
         const esp_mqtt_client_config_t mqtt_cfg = {
                 .uri = mjs_get_cstring(mjs, &arg0),
-//                .cert_pem = (const char *) iot_eclipse_org_pem_start,
-                .username = mjs_is_string(arg1) ? mjs_get_cstring(mjs, &arg1) : NULL,
-                .password = mjs_is_string(arg2) ? mjs_get_cstring(mjs, &arg2) : NULL
+//                .cert_pem = (const char *) iot_eclipse_org_pem_start
         };
 
         esp_mqtt_client_handle_t client = esp_mqtt_client_init(&mqtt_cfg);

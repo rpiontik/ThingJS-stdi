@@ -2,8 +2,8 @@
 // Created by rpiontik on 19.01.20.
 //
 
-#ifndef THINGJS_TGSI_MQTT_H
-#define THINGJS_TGSI_MQTT_H
+#ifndef THINGJS_TGSI_MQTTC_H
+#define THINGJS_TGSI_MQTTC_H
 
 void thingjsMQTTRegister(void);
 
