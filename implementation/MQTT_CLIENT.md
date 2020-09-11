@@ -13,8 +13,8 @@ Based on mqtt client by esp-idf.
 ## Configuration
 * Curently support mqtt, mqtts, ws, wss schemes
   * MQTT over TCP samples:
-    * ``mqtt://mqtt.eclipse.org``: MQTT over TCP, default port 1883:
-    * ``mqtt://mqtt.eclipse.org:1884`` MQTT over TCP, port 1884:
+    * ``mqtt://mqtt.eclipse.org``: MQTT over TCP, default port 1883
+    * ``mqtt://mqtt.eclipse.org:1884`` MQTT over TCP, port 1884
     * ``mqtt://username:password@mqtt.eclipse.org:1884`` MQTT over TCP, port 1884, with username and password 
   * MQTT over SSL samples:
     * ``mqtts://mqtt.eclipse.org``: MQTT over SSL, port 8883
