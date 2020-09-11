@@ -1,4 +1,4 @@
-# ThingJS http interface
+# ThingJS MQTT client interface
 
 MQTT client for the ThingJS platform.
 Based on mqtt client by esp-idf.

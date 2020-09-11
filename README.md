@@ -20,7 +20,6 @@ git submodule add git@github.com:rpiontik/ThingJS-stdi.git components/thingjs_st
 6. [mqqtc](/implementation/MQTT_CLIENT.md) - MQTT client.
 
 # Licensing
-
 ThingsJS is released under
 [GNU GPL v.2](http://www.gnu.org/licenses/old-licenses/gpl-2.0.html)
 open source license.
