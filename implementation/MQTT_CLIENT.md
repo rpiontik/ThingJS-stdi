@@ -13,16 +13,16 @@ Based on mqtt client by esp-idf.
 ## Configuration
 * Curently support mqtt, mqtts, ws, wss schemes
   * MQTT over TCP samples:
-    * mqtt://mqtt.eclipse.org: MQTT over TCP, default port 1883:
-    * mqtt://mqtt.eclipse.org:1884 MQTT over TCP, port 1884:
-    * mqtt://username:password@mqtt.eclipse.org:1884 MQTT over TCP, port 1884, with username and password 
+    * ``mqtt://mqtt.eclipse.org``: MQTT over TCP, default port 1883:
+    * ``mqtt://mqtt.eclipse.org:1884`` MQTT over TCP, port 1884:
+    * ``mqtt://username:password@mqtt.eclipse.org:1884`` MQTT over TCP, port 1884, with username and password 
   * MQTT over SSL samples:
-    * mqtts://mqtt.eclipse.org: MQTT over SSL, port 8883
-    * mqtts://mqtt.eclipse.org:8884: MQTT over SSL, port 8884
+    * ``mqtts://mqtt.eclipse.org``: MQTT over SSL, port 8883
+    * ``mqtts://mqtt.eclipse.org:8884``: MQTT over SSL, port 8884
   * MQTT over Websocket samples:
-    * ws://mqtt.eclipse.org:80/mqtt
+    * ``ws://mqtt.eclipse.org:80/mqtt``
   * MQTT over Websocket Secure samples:
-    * wss://mqtt.eclipse.org:443/mqtt
+    * ``wss://mqtt.eclipse.org:443/mqtt``
     
 ## Events
 * **onbeforeconnected()** - The client is initialized and about to start connecting to the broker.        
