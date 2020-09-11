@@ -12,6 +12,7 @@
 #include "implementation/tgsi_smart_led.h"
 #include "implementation/tgsi_http.h"
 #include "implementation/tgsi_ds18x20.h"
+#include "implementation/tgsi_mqtt.h"
 
 void thingjsSTDIRegister(void) {
     thingjsBitPortRegister();
@@ -21,4 +22,5 @@ void thingjsSTDIRegister(void) {
     thingjsSmartLEDRegister();
     thingjsHTTPRegister();
     thingjsDS18X20Register();
+    thingjsMQTTRegister();
 }
