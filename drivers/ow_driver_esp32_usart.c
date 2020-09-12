@@ -110,7 +110,6 @@ int reset_wire(ow_driver_ptr d)
 
 	// Restore "normal" operating speed
 	WRITE_PERI_REG(UART_CLKDIV_REG(d->uart), UCLKDIV_115200);
-
 	if (ow_presence != RESET_BYTE) {
 		return OW_OK;
 	}
@@ -128,7 +127,7 @@ int write_bit(ow_driver_ptr d, uint8_t bit)
 	while ( ((s & 0x0F000000) < 0x09000000) && ((s & 0x0F00) < 0x0B00) )
 	{
 		s = READ_PERI_REG(UART_STATUS_REG(d->uart));
-		ets_delay_us(5);
+		ets_delay_us(8);
 	}
 
 	return OW_OK;
