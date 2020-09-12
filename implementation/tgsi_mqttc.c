@@ -28,32 +28,30 @@ struct thingjs_mqtt_context {
 #define MAX_NUMBER_EVENT_PARAMS 3
 
 struct thingjs_mqtt_event {
-    mjs_val_t func;
-    mjs_val_t this;
-    int params_number;
-    mjs_val_t args[MAX_NUMBER_EVENT_PARAMS];
+    esp_mqtt_event_id_t event_id;
+    int msg_id;
+    struct thingjs_mqtt_context * context;
+    union {
+        struct {
+            char * topic;
+            int topic_len;
+            char * payload;
+            int payload_len;
+        } data;
+        struct {
+            int mbedtls_err;
+            esp_err_t err;
+        } error;
+    };
 };
 
-mjs_val_t thingjs_mqtt_event_callback(struct mjs *context, void *data) {
+mjs_val_t thingjs_mqtt_event_callback(struct mjs *mjs, void *data) {
     struct thingjs_mqtt_event *callback_data = data;
-    mjs_val_t result = mjs_apply(context, NULL, callback_data->func, MJS_UNDEFINED,
-                                 callback_data->params_number, callback_data->args);
-    free(callback_data);
-    return result;
-}
-
-static void thingjs_mqtt_event_handler(void *handler_args, esp_event_base_t base, int32_t event_id, void *event_data) {
-    struct thingjs_mqtt_context *context = handler_args;
-    esp_mqtt_event_handle_t event = event_data;
-    struct thingjs_mqtt_event func_data = {
-            .args = {MJS_UNDEFINED},
-            .func = MJS_UNDEFINED,
-            .this = context->this,
-            .params_number = 0
-    };
+    mjs_val_t result = MJS_OK;
+    mjs_val_t args[MAX_NUMBER_EVENT_PARAMS] = {MJS_UNDEFINED};
+    int agrs_num = 0;
     char *event_name = NULL;
-    ESP_LOGD(TAG_MQTT, "Event dispatched from event loop base=%s, event_id=%d", base, event_id);
-    switch (event->event_id) {
+    switch (callback_data->event_id) {
         case MQTT_EVENT_BEFORE_CONNECT:
             event_name = "onbeforeconnected";
             break;
@@ -65,48 +63,84 @@ static void thingjs_mqtt_event_handler(void *handler_args, esp_event_base_t base
             break;
         case MQTT_EVENT_SUBSCRIBED:
             event_name = "onsubscribed";
-            func_data.params_number = 1;
-            func_data.args[0] = mjs_mk_number(context->mjs, event->msg_id);
+            agrs_num = 1;
+            args[0] = mjs_mk_number(mjs, callback_data->msg_id);
             break;
         case MQTT_EVENT_UNSUBSCRIBED:
             event_name = "onunsubscribed";
-            func_data.params_number = 1;
-            func_data.args[0] = mjs_mk_number(context->mjs, event->msg_id);
+            agrs_num = 1;
+            args[0] = mjs_mk_number(mjs, callback_data->msg_id);
             break;
         case MQTT_EVENT_PUBLISHED:
             event_name = "onpublished";
-            func_data.params_number = 1;
-            func_data.args[0] = mjs_mk_number(context->mjs, event->msg_id);
+            agrs_num = 1;
+            args[0] = mjs_mk_number(mjs, callback_data->msg_id);
             break;
         case MQTT_EVENT_DATA:
             event_name = "ondata";
-            func_data.params_number = 2;
-            func_data.args[0] = mjs_mk_string(context->mjs, event->topic, event->topic_len, 1);
-            func_data.args[1] = mjs_mk_string(context->mjs, event->data, event->data_len, 1);
+            agrs_num = 2;
+            args[0] = mjs_mk_string(mjs,
+                                    callback_data->data.topic,
+                                    callback_data->data.topic_len,
+                                    1
+                                    );
+            args[1] = mjs_mk_string(mjs,
+                                    callback_data->data.payload,
+                                    callback_data->data.payload_len,
+                                    1
+            );
+            free(callback_data->data.payload);
+            free(callback_data->data.topic);
             break;
         case MQTT_EVENT_ERROR:
             event_name = "onerror";
-            func_data.params_number = 2;
-            int mbedtls_err = 0;
-            esp_err_t err = esp_tls_get_and_clear_last_error(event->error_handle, &mbedtls_err, NULL);
-            func_data.args[0] = mjs_mk_number(context->mjs, err);
-            func_data.args[1] = mjs_mk_number(context->mjs, mbedtls_err);
+            agrs_num = 2;
+            args[0] = mjs_mk_number(mjs, callback_data->error.err);
+            args[1] = mjs_mk_number(mjs, callback_data->error.mbedtls_err);
             break;
         default:
-            ESP_LOGD(TAG_MQTT, "Other event id:%d", event->event_id);
+            ESP_LOGE(TAG_MQTT, "Unknown event id:%d", callback_data->event_id);
             break;
     }
 
     if (event_name) {
-        func_data.func = mjs_get(context->mjs, context->this, event_name, ~0);
-        if (mjs_is_function(func_data.func)) {
-            struct thingjs_mqtt_event *callback_data = malloc(sizeof(struct thingjs_mqtt_event));
-            memcpy(callback_data, &func_data, sizeof(struct thingjs_mqtt_event));
-            if (pdTRUE != thingjsSendCallbackRequest(context->process, thingjs_mqtt_event_callback, callback_data)) {
-                free(callback_data);
-                ESP_LOGE(TAG_MQTT, "Event stack is full! [%s]", event_name);
-            }
+        mjs_val_t func = mjs_get(mjs, callback_data->context->this, event_name, ~0);
+        if (mjs_is_function(func)) {
+            result = mjs_apply(mjs, NULL, func, callback_data->context->this, agrs_num, args);
         }
+    }
+    free(callback_data);
+    return result;
+}
+
+static void thingjs_mqtt_event_handler(void *handler_args, esp_event_base_t base, int32_t event_id, void *event_data) {
+    esp_mqtt_event_handle_t event = event_data;
+    struct thingjs_mqtt_event * callback_data = malloc(sizeof(struct thingjs_mqtt_event));
+    callback_data->event_id = event->event_id;
+    callback_data->msg_id = event->msg_id;
+    callback_data->context = handler_args;
+
+    switch (event->event_id) {
+        case MQTT_EVENT_DATA:
+            callback_data->data.payload = malloc(event->data_len);
+            callback_data->data.payload_len = event->data_len;
+            memcpy(callback_data->data.payload, event->data, event->data_len);
+
+            callback_data->data.topic = malloc(event->topic_len);
+            callback_data->data.topic_len = event->topic_len;
+            memcpy(callback_data->data.topic, event->topic, event->topic_len);
+            break;
+        case MQTT_EVENT_ERROR:
+            callback_data->error.err = esp_tls_get_and_clear_last_error(
+                    event->error_handle, &callback_data->error.mbedtls_err, NULL);
+            break;
+        default:
+            break;
+    }
+
+    if (pdTRUE != thingjsSendCallbackRequest(callback_data->context->process, thingjs_mqtt_event_callback, callback_data)) {
+        free(callback_data);
+        ESP_LOGE(TAG_MQTT, "Event stack is full! Event [%d] message [%d]", event->event_id, event->msg_id);
     }
 }
 
@@ -172,12 +206,12 @@ static void thingjsMQTTSubscribe(struct mjs *mjs) {
     mjs_val_t arg1 = mjs_arg(mjs, 0);   //COS
     mjs_val_t this = mjs_get_this(mjs);    //this interface object
     mjs_val_t client = mjs_get(mjs, this, SYS_PROP_CLIENT, ~0); //MQTT Client
-    if (mjs_is_string(arg0) && mjs_is_number(arg1) && mjs_is_object(this) && mjs_is_foreign(client)) {
+    if (mjs_is_string(arg0) && mjs_is_object(this) && mjs_is_foreign(client)) {
         result = mjs_mk_number(mjs,
                                esp_mqtt_client_subscribe(
                                        mjs_get_ptr(mjs, client),
                                        mjs_get_cstring(mjs, &arg0),
-                                       mjs_get_int(mjs, arg1)
+                                       mjs_is_number(arg1)  ? mjs_get_int(mjs, arg1) : 0
                                )
         );
     } else {
@@ -257,6 +291,7 @@ mjs_val_t thingjsMQTTConstructor(struct mjs *mjs, cJSON *params) {
 }
 
 void thingjsMQTTDestructor(struct mjs *mjs, mjs_val_t subject) {
+    //todo ВЫСВОБОДИТь КОНТЕКСТ
     mjs_val_t mjs_client = mjs_get(mjs, subject, SYS_PROP_CLIENT, ~0);
     if (mjs_is_foreign(mjs_client)) {
         esp_mqtt_client_handle_t client = mjs_get_ptr(mjs, mjs_client);

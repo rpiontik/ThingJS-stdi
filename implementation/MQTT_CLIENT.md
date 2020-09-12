@@ -89,12 +89,12 @@ $res.mqtt.disconnect();
 ```
 
 
-### subscribe(topic, qos) 
+### subscribe(topic, [qos]) 
 Subscribe the client to defined topic with defined qos.
 
 Syntax
 
-``int subscribe(string, int)``
+``int subscribe(string, [int])``
 
 Notes:
 * Client must be connected to send subscribe message
