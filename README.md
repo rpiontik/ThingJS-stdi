@@ -16,10 +16,11 @@ git submodule add git@github.com:rpiontik/ThingJS-stdi.git components/thingjs_st
 2. [bit_port](/implementation/BIT_PORT.md) - Provide GPIO configuration functions;
 3. [HTTP](/implementation/HTTP.md) - HTTP/HTTPS client;
 4. [DS3231](/implementation/DS3231.md) - Provide RTC functions for chip ds3231 and compatible;
-5. [SmartLED](/implementation/SMART_LED.md) - Smart LED interface.
+5. [SmartLED](/implementation/SMART_LED.md) - Smart LED interface;
+6. [DS18X20](/implementation/DS18X20.md) - DS18X20 interface;
+7. [mqttc](/implementation/MQTT_CLIENT.md) - MQTT client.
 
 # Licensing
-
 ThingsJS is released under
 [GNU GPL v.2](http://www.gnu.org/licenses/old-licenses/gpl-2.0.html)
 open source license.
