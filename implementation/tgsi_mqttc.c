@@ -162,7 +162,7 @@ static void thingjsMQTTPublish(struct mjs *mjs) {
 
         result = mjs_mk_number(mjs,
                                esp_mqtt_client_publish(
-                                       mjs_get_ptr(mjs, ((struct thingjs_mqtt_context*)context)->client),
+                                       ((struct thingjs_mqtt_context*)mjs_get_ptr(mjs,context))->client,
                                        mjs_get_cstring(mjs, &arg0),
                                        data,
                                        data_len,
@@ -188,7 +188,7 @@ static void thingjsMQTTUnsubscribe(struct mjs *mjs) {
     if (mjs_is_string(arg0) && mjs_is_object(this) && mjs_is_foreign(context)) {
         result = mjs_mk_number(mjs,
                                esp_mqtt_client_unsubscribe(
-                                       mjs_get_ptr(mjs, ((struct thingjs_mqtt_context*)context)->client),
+                                       ((struct thingjs_mqtt_context*)mjs_get_ptr(mjs,context))->client,
                                        mjs_get_cstring(mjs, &arg0)
                                )
         );
@@ -210,7 +210,7 @@ static void thingjsMQTTSubscribe(struct mjs *mjs) {
     if (mjs_is_string(arg0) && mjs_is_object(this) && mjs_is_foreign(context)) {
         result = mjs_mk_number(mjs,
                                esp_mqtt_client_subscribe(
-                                       mjs_get_ptr(mjs, ((struct thingjs_mqtt_context*)context)->client),
+                                       ((struct thingjs_mqtt_context*)mjs_get_ptr(mjs,context))->client,
                                        mjs_get_cstring(mjs, &arg0),
                                        mjs_is_number(arg1)  ? mjs_get_int(mjs, arg1) : 0
                                )
