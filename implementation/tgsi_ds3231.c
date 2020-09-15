@@ -116,7 +116,7 @@ esp_err_t rtcSetTime(time_t * loc_time) {
 
 //Read from RTC module current time
 //if RTC presented
-inline esp_err_t time_syncFromRTC(void) {
+esp_err_t time_syncFromRTC(void) {
     time_t ptime;
     const esp_err_t result = rtcGetTime (&ptime);
     if (ESP_OK == result)	{

@@ -171,7 +171,7 @@ static void thingjsMQTTPublish(struct mjs *mjs) {
                                )
         );
     } else {
-        mjs_set_errorf(mjs, MJS_INTERNAL_ERROR, "%s/%s: Incorrect params of function unsubscribe",
+        mjs_set_errorf(mjs, MJS_INTERNAL_ERROR, "%s/%s: Incorrect params of function publish",
                        pcTaskGetTaskName(NULL), TAG_MQTT);
         result = MJS_INTERNAL_ERROR;
     }
