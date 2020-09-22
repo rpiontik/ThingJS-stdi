@@ -15,11 +15,12 @@
 #include "esp_tls.h"
 
 #define  INTERFACE_NAME "mqttc"
-#define  SYS_PROP_CLIENT  "$client"
+#define  SYS_PROP_CONTEXT  "$context"
 
 const char TAG_MQTT[] = INTERFACE_NAME;
 
 struct thingjs_mqtt_context {
+    esp_mqtt_client_handle_t client;
     TaskHandle_t process;
     mjs_val_t this;
     struct mjs *mjs;
@@ -152,8 +153,8 @@ static void thingjsMQTTPublish(struct mjs *mjs) {
     mjs_val_t arg2 = mjs_arg(mjs, 2);   //QOS
     mjs_val_t arg3 = mjs_arg(mjs, 3);   //Retain
     mjs_val_t this = mjs_get_this(mjs);    //this interface object
-    mjs_val_t client = mjs_get(mjs, this, SYS_PROP_CLIENT, ~0); //MQTT Client
-    if (mjs_is_string(arg0) && mjs_is_string(arg1) && mjs_is_object(this) && mjs_is_foreign(client)) {
+    mjs_val_t context = mjs_get(mjs, this, SYS_PROP_CONTEXT, ~0); //MQTT Client
+    if (mjs_is_string(arg0) && mjs_is_string(arg1) && mjs_is_object(this) && mjs_is_foreign(context)) {
         int qos = mjs_is_number(arg2) ? mjs_get_int(mjs, arg2) : 0;
         int retain = mjs_is_number(arg3) ? mjs_get_int(mjs, arg3) : 0;
         size_t data_len = 0;
@@ -161,7 +162,7 @@ static void thingjsMQTTPublish(struct mjs *mjs) {
 
         result = mjs_mk_number(mjs,
                                esp_mqtt_client_publish(
-                                       mjs_get_ptr(mjs, client),
+                                       ((struct thingjs_mqtt_context*)mjs_get_ptr(mjs,context))->client,
                                        mjs_get_cstring(mjs, &arg0),
                                        data,
                                        data_len,
@@ -170,7 +171,7 @@ static void thingjsMQTTPublish(struct mjs *mjs) {
                                )
         );
     } else {
-        mjs_set_errorf(mjs, MJS_INTERNAL_ERROR, "%s/%s: Incorrect params of function unsubscribe",
+        mjs_set_errorf(mjs, MJS_INTERNAL_ERROR, "%s/%s: Incorrect params of function publish",
                        pcTaskGetTaskName(NULL), TAG_MQTT);
         result = MJS_INTERNAL_ERROR;
     }
@@ -183,11 +184,11 @@ static void thingjsMQTTUnsubscribe(struct mjs *mjs) {
     //Get function params
     mjs_val_t arg0 = mjs_arg(mjs, 0);   //Topic
     mjs_val_t this = mjs_get_this(mjs);    //this interface object
-    mjs_val_t client = mjs_get(mjs, this, SYS_PROP_CLIENT, ~0); //MQTT Client
-    if (mjs_is_string(arg0) && mjs_is_object(this) && mjs_is_foreign(client)) {
+    mjs_val_t context = mjs_get(mjs, this, SYS_PROP_CONTEXT, ~0); //MQTT Client
+    if (mjs_is_string(arg0) && mjs_is_object(this) && mjs_is_foreign(context)) {
         result = mjs_mk_number(mjs,
                                esp_mqtt_client_unsubscribe(
-                                       mjs_get_ptr(mjs, client),
+                                       ((struct thingjs_mqtt_context*)mjs_get_ptr(mjs,context))->client,
                                        mjs_get_cstring(mjs, &arg0)
                                )
         );
@@ -205,11 +206,11 @@ static void thingjsMQTTSubscribe(struct mjs *mjs) {
     mjs_val_t arg0 = mjs_arg(mjs, 0);   //Topic
     mjs_val_t arg1 = mjs_arg(mjs, 0);   //COS
     mjs_val_t this = mjs_get_this(mjs);    //this interface object
-    mjs_val_t client = mjs_get(mjs, this, SYS_PROP_CLIENT, ~0); //MQTT Client
-    if (mjs_is_string(arg0) && mjs_is_object(this) && mjs_is_foreign(client)) {
+    mjs_val_t context = mjs_get(mjs, this, SYS_PROP_CONTEXT, ~0); //MQTT Client
+    if (mjs_is_string(arg0) && mjs_is_object(this) && mjs_is_foreign(context)) {
         result = mjs_mk_number(mjs,
                                esp_mqtt_client_subscribe(
-                                       mjs_get_ptr(mjs, client),
+                                       ((struct thingjs_mqtt_context*)mjs_get_ptr(mjs,context))->client,
                                        mjs_get_cstring(mjs, &arg0),
                                        mjs_is_number(arg1)  ? mjs_get_int(mjs, arg1) : 0
                                )
@@ -236,12 +237,13 @@ static void thingjsMQTTConnect(struct mjs *mjs) {
         esp_mqtt_client_handle_t client = esp_mqtt_client_init(&mqtt_cfg);
         if (client) {
             struct thingjs_mqtt_context *context = malloc(sizeof(struct thingjs_mqtt_context));
+            context->client = client;
             context->process = xTaskGetCurrentTaskHandle();
             context->mjs = mjs;
             context->this = this;
             esp_mqtt_client_register_event(client, ESP_EVENT_ANY_ID, thingjs_mqtt_event_handler, context);
             esp_mqtt_client_start(client);
-            stdi_setProtectedProperty(mjs, this, SYS_PROP_CLIENT, mjs_mk_foreign(mjs, client));
+            stdi_setProtectedProperty(mjs, this, SYS_PROP_CONTEXT, mjs_mk_foreign(mjs, context));
 
         } else {
             mjs_set_errorf(mjs, MJS_INTERNAL_ERROR, "%s/%s: Can not create client",
@@ -260,9 +262,9 @@ static void thingjsMQTTReconnect(struct mjs *mjs) {
     mjs_val_t result = MJS_OK;
     //Get function params
     mjs_val_t this = mjs_get_this(mjs);    //this interface object
-    mjs_val_t client = mjs_get(mjs, this, SYS_PROP_CLIENT, ~0); //MQTT Client
-    if (mjs_is_object(this) && mjs_is_foreign(client)) {
-        esp_mqtt_client_reconnect(mjs_get_ptr(mjs, client));
+    mjs_val_t context = mjs_get(mjs, this, SYS_PROP_CONTEXT, ~0); //MQTT Client
+    if (mjs_is_object(this) && mjs_is_foreign(context)) {
+        esp_mqtt_client_reconnect(mjs_get_ptr(mjs, context));
     } else {
         mjs_set_errorf(mjs, MJS_INTERNAL_ERROR, "%s/%s: Incorrect params of function reconnect",
                        pcTaskGetTaskName(NULL), TAG_MQTT);
@@ -291,12 +293,12 @@ mjs_val_t thingjsMQTTConstructor(struct mjs *mjs, cJSON *params) {
 }
 
 void thingjsMQTTDestructor(struct mjs *mjs, mjs_val_t subject) {
-    //todo ВЫСВОБОДИТь КОНТЕКСТ
-    mjs_val_t mjs_client = mjs_get(mjs, subject, SYS_PROP_CLIENT, ~0);
-    if (mjs_is_foreign(mjs_client)) {
-        esp_mqtt_client_handle_t client = mjs_get_ptr(mjs, mjs_client);
-        esp_mqtt_client_stop(client);
-        esp_mqtt_client_destroy(client);
+    mjs_val_t mjs_context = mjs_get(mjs, subject, SYS_PROP_CONTEXT, ~0);
+    if (mjs_is_foreign(mjs_context)) {
+        struct thingjs_mqtt_context* context = mjs_get_ptr(mjs, mjs_context);
+        esp_mqtt_client_stop(context->client);
+        esp_mqtt_client_destroy(context->client);
+        free(context);
     }
 }
 
