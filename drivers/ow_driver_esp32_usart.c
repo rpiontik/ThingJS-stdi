@@ -125,10 +125,10 @@ int write_bit(ow_driver_ptr d, uint8_t bit)
 
 	// Wait until all 8 bits sent, i.e. TX_DAT7 reached (at least) and RX_STP1 (received bits filled in)
 	uint32_t s = READ_PERI_REG(UART_STATUS_REG(d->uart));
-	while ( ((s & 0x0F000000) < 0x09000000) && ((s & 0x0F00) < 0x0B00) )
+	while ( ((s & 0x0F000000) < 0x09000000) && ((s & 0x0F00) < 0x0B00) && ((s & 0x0FFF0000) != 0))
 	{
 		s = READ_PERI_REG(UART_STATUS_REG(d->uart));
-		ets_delay_us(8);
+		ets_delay_us(5);
 	}
 
 	return OW_OK;
@@ -142,7 +142,14 @@ int read_bit(ow_driver_ptr d, uint8_t *rbit)
 	uart_flush(d->uart);
 	uart_write_bytes(d->uart, (const char *) &owone, 1);
 
-	while ((READ_PERI_REG(UART_STATUS_REG(d->uart)) & 0x0F000000) < 0x09000000);
+    uint32_t s = READ_PERI_REG(UART_STATUS_REG(d->uart));
+    while ( ((s & 0x0F000000) < 0x09000000) && ((s & 0x0FFF0000) != 0))
+    {
+        s = READ_PERI_REG(UART_STATUS_REG(d->uart));
+        ets_delay_us(5);
+    }
+
+	// while ((READ_PERI_REG(UART_STATUS_REG(d->uart)) & 0x0F000000) < 0x09000000);
 
 	uart_read_bytes(d->uart, &bit, 1, 20 / portTICK_RATE_MS);
 
