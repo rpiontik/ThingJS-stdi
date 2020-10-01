@@ -80,7 +80,7 @@ int init_driver(ow_driver_ptr *d, int uart, int rx, int tx)
 
 	if (uart_param_config((*d)->uart, &uart_config) != ESP_OK) { return OW_ERR; }
 	if (uart_set_pin((*d)->uart, tx, rx, ECHO_TEST_RTS, ECHO_TEST_CTS) != ESP_OK) { return OW_ERR; }
-	if (uart_set_line_inverse((*d)->uart, UART_INVERSE_TXD) != ESP_OK) { return OW_ERR; }
+	//if (uart_set_line_inverse((*d)->uart, UART_INVERSE_TXD) != ESP_OK) { return OW_ERR; }
 	if (uart_driver_install((*d)->uart, UART_FIFO_LEN*2, 0, 0, NULL, 0) != ESP_OK) { return OW_ERR; }
 
 	return OW_OK;
@@ -122,13 +122,13 @@ int write_bit(ow_driver_ptr d, uint8_t bit)
 {
 	uart_flush(d->uart);
 	uart_write_bytes(d->uart, (const char *) &ow_bits[bit], 1);
-
+    uart_wait_tx_done(d->uart,20);
 	// Wait until all 8 bits sent, i.e. TX_DAT7 reached (at least) and RX_STP1 (received bits filled in)
 	uint32_t s = READ_PERI_REG(UART_STATUS_REG(d->uart));
-	while ( ((s & 0x0F000000) < 0x09000000) && ((s & 0x0F00) < 0x0B00) )
+	while ( ((s & 0x0F000000) < 0x09000000) && ((s & 0x0F00) < 0x0B00) && ((s & 0x0F000000) != 0))
 	{
 		s = READ_PERI_REG(UART_STATUS_REG(d->uart));
-		ets_delay_us(8);
+		//ets_delay_us(5);
 	}
 
 	return OW_OK;
@@ -141,8 +141,15 @@ int read_bit(ow_driver_ptr d, uint8_t *rbit)
 
 	uart_flush(d->uart);
 	uart_write_bytes(d->uart, (const char *) &owone, 1);
+    uart_wait_tx_done(d->uart,20);
+    uint32_t s = READ_PERI_REG(UART_STATUS_REG(d->uart));
+    while ( ((s & 0x0F000000) < 0x09000000) && ((s & 0x0F000000) != 0))
+    {
+        s = READ_PERI_REG(UART_STATUS_REG(d->uart));
+        //ets_delay_us(5);
+    }
 
-	while ((READ_PERI_REG(UART_STATUS_REG(d->uart)) & 0x0F000000) < 0x09000000);
+	// while ((READ_PERI_REG(UART_STATUS_REG(d->uart)) & 0x0F000000) < 0x09000000);
 
 	uart_read_bytes(d->uart, &bit, 1, 20 / portTICK_RATE_MS);
 
