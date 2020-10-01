@@ -14,6 +14,7 @@
 #include "implementation/tgsi_ds18x20.h"
 #include "implementation/tgsi_mqttc.h"
 #include "implementation/tgsi_sys_info.h"
+#include "implementation/tgsi_pref.h"
 
 void thingjsSTDIRegister(void) {
     thingjsBitPortRegister();
@@ -25,4 +26,5 @@ void thingjsSTDIRegister(void) {
     thingjsDS18X20Register();
     thingjsMQTTRegister();
     thingjsSysInfoRegister();
+    thingjsPrefRegister();
 }
