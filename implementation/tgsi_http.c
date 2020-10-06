@@ -14,11 +14,13 @@
 #include "lwip/netdb.h"
 #include "lwip/dns.h"
 #include "mbedtls/base64.h"
+#include "mjs.h"
 
 #include "sdti_utils.h"
 #include "thingjs_board.h"
 #include "thingjs_core.h"
 #include "esp_tls.h"
+#include "mjs.h"
 
 #define  INTERFACE_NAME "http"
 

@@ -14,7 +14,7 @@
 const char TAG_BIT_PORT[] = "BIT_PORT";
 
 //
-inline gpio_num_t getGPIO(struct mjs *mjs) {
+gpio_num_t getGPIO(struct mjs *mjs) {
     //Get this object that store params
     mjs_val_t this_obj = mjs_get_this(mjs);
     //Get internal params
