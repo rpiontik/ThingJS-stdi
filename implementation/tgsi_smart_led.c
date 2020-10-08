@@ -243,7 +243,7 @@ static void thingjsSmartLEDReconfigChannel(struct mjs *mjs) {
 
         //Get duty param (if found)
         const mjs_val_t mjs_duty = mjs_get(mjs, arg0, DEF_STR_DUTY, ~0);
-        if(mjs_is_number(mjs_inverse))
+        if(mjs_is_number(mjs_duty))
             duty = mjs_get_int32(mjs, mjs_duty);
     }
 
