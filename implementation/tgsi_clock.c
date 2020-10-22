@@ -63,7 +63,6 @@ static void thingjsParse(struct mjs *mjs) {
     mjs_return(mjs, result);
 }
 
-
 mjs_val_t thingjsClockConstructor(struct mjs *mjs, cJSON *params) {
     //Create mjs object
     mjs_val_t interface = mjs_mk_object(mjs);

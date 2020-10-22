@@ -30,6 +30,29 @@ $res.timers.setInterval(function () {
 }, 1000);
 ```
 
+## parse()
+Parse given time into calendar time.
+
+Syntax
+```text
+epoch parse([epoch])
+```
+
+Example
+```js
+let currTime = $res.clock.parse();
+print(
+    'sec=', currTime.sec,
+    ' min=', currTime.min,
+    ' hour=', currTime.hour,
+    ' mday=', currTime.mday,
+    ' mon=', currTime.mon,
+    ' year=', currTime.year,
+    ' wday=', currTime.wday,
+    ' yday=', currTime.yday
+);
+```
+
 # Manifest requires
 ```js
   "requires": {
