@@ -17,9 +17,9 @@
 #include "thingjs_core.h"
 
 #define  INTERFACE_NAME "timers"
-#define  SYS_PROP_JOBS  "$jobs"
 
 const char TAG_TIMER[] = INTERFACE_NAME;
+const char SYS_PROP_JOBS[] = "$jobs";
 
 struct timer_params {
     TaskHandle_t process;   //Context owner
@@ -43,7 +43,7 @@ static void thingjsRunTimer(struct mjs *mjs, bool is_interval) {
     //Get function params
     mjs_val_t arg0 = mjs_arg(mjs, 0);   //Callback function
     mjs_val_t arg1 = mjs_arg(mjs, 1);   //Interval
-    mjs_val_t arg3 = mjs_arg(mjs, 1);   //Params
+    mjs_val_t arg3 = mjs_arg(mjs, 2);   //Custom data
     mjs_val_t this = mjs_get_this(mjs); //this interface object
     mjs_val_t jobs = mjs_get(mjs, this, SYS_PROP_JOBS, ~0); //Active timer's jobs
 
@@ -51,7 +51,7 @@ static void thingjsRunTimer(struct mjs *mjs, bool is_interval) {
 
     if (mjs_is_array(jobs) && mjs_is_object(this) && mjs_is_function(arg0)
         && mjs_is_number(arg1) && mjs_get_int32(mjs, arg1) > 0) {
-        char timer_name[256];
+        char timer_name[128];
         uint32_t interval = mjs_get_int32(mjs, arg1);
         snprintf(timer_name, sizeof(timer_name) - 1, "%s/%s/%d", app_name, TAG_TIMER, 0); //todo - need to ID of timer
         ESP_LOGD(TAG_TIMER, "Registered timer [%s]", timer_name);
@@ -64,8 +64,13 @@ static void thingjsRunTimer(struct mjs *mjs, bool is_interval) {
         params->params = arg3;
 
 
-        TimerHandle_t timer_handle = xTimerCreate(timer_name, interval, is_interval ?  pdTRUE : pdFALSE,
-                params, vm_timer_callback);
+        TimerHandle_t timer_handle = xTimerCreate(
+                timer_name,
+                interval / portTICK_PERIOD_MS,
+                is_interval ?  pdTRUE : pdFALSE,
+                params,
+                vm_timer_callback
+                );
 
         if (xTimerStart(timer_handle, 0) != pdPASS) {
             xTimerDelete(timer_handle, 0);

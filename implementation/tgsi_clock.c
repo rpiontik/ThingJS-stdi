@@ -37,6 +37,33 @@ static void thingjsSetTime(struct mjs *mjs) {
     }
 }
 
+static void thingjsParse(struct mjs *mjs) {
+    mjs_val_t arg0 = mjs_arg(mjs, 0);   //Time
+
+    time_t time = {0};
+
+    if(mjs_is_number(arg0)) {
+        time = mjs_get_double(mjs, arg0);
+    } else {
+        currentTime(&time);
+    }
+
+    struct tm *tm = gmtime(&time);
+
+    mjs_val_t result = mjs_mk_object(mjs);
+    mjs_set(mjs, result, "sec", ~0, mjs_mk_number(mjs, tm->tm_sec));
+    mjs_set(mjs, result, "min", ~0, mjs_mk_number(mjs, tm->tm_min));
+    mjs_set(mjs, result, "hour", ~0, mjs_mk_number(mjs, tm->tm_hour));
+    mjs_set(mjs, result, "mday", ~0, mjs_mk_number(mjs, tm->tm_mday));
+    mjs_set(mjs, result, "mon", ~0, mjs_mk_number(mjs, tm->tm_mon));
+    mjs_set(mjs, result, "year", ~0, mjs_mk_number(mjs, tm->tm_year));
+    mjs_set(mjs, result, "wday", ~0, mjs_mk_number(mjs, tm->tm_wday));
+    mjs_set(mjs, result, "yday", ~0, mjs_mk_number(mjs, tm->tm_yday));
+
+    mjs_return(mjs, result);
+}
+
+
 mjs_val_t thingjsClockConstructor(struct mjs *mjs, cJSON *params) {
     //Create mjs object
     mjs_val_t interface = mjs_mk_object(mjs);
@@ -46,6 +73,8 @@ mjs_val_t thingjsClockConstructor(struct mjs *mjs, cJSON *params) {
             mjs_mk_foreign_func(mjs, (mjs_func_ptr_t) thingjsSetTime));
     stdi_setProtectedProperty(mjs, interface, "getTime",
             mjs_mk_foreign_func(mjs, (mjs_func_ptr_t) thingjsGetTime));
+    stdi_setProtectedProperty(mjs, interface, "parse",
+                              mjs_mk_foreign_func(mjs, (mjs_func_ptr_t) thingjsParse));
 
     //Return mJS interface object
     return interface;
