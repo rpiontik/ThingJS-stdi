@@ -20,6 +20,9 @@ git submodule add git@github.com:rpiontik/ThingJS-stdi.git components/thingjs_st
 6. [DS18X20](/implementation/DS18X20.md) - DS18X20 interface;
 7. [mqttc](/implementation/MQTT_CLIENT.md) - MQTT client.
 
+# Thankful
+* [JetBrains](https://www.jetbrains.com/) for OpenSource license.
+
 # Licensing
 ThingsJS is released under
 [GNU GPL v.2](http://www.gnu.org/licenses/old-licenses/gpl-2.0.html)
