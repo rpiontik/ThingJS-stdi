@@ -180,7 +180,7 @@ static void thingjsSmartLEDUnsubscribe(void) {
  */
 
 static void thingjsSmartLEDSetFadeTimeAndStart(struct mjs *mjs) {
-    ESP_LOGD(TAG_SMARTLED, "START FADE");
+    // ESP_LOGD(TAG_SMARTLED, "START FADE");
 
     //Get function params
     mjs_val_t arg0 = mjs_arg(mjs, 0);   //Target duty
@@ -215,17 +215,17 @@ static void thingjsSmartLEDSetFadeTimeAndStart(struct mjs *mjs) {
             .target = (uint32_t)mjs_get_int32(mjs, arg0) & 0xFFFF
     };
 
-    ESP_LOGD(TAG_SMARTLED, "APPLY FADE controller=%d, channel=%d, target=%d, fade_ms=%d",
-             q_message.controller, q_message.channel, q_message.target, q_message.fade);
+    // ESP_LOGD(TAG_SMARTLED, "APPLY FADE controller=%d, channel=%d, target=%d, fade_ms=%d",
+    //         q_message.controller, q_message.channel, q_message.target, q_message.fade);
 
     xQueueSend(smartLED_demon_input, &q_message, ( TickType_t ) (FADE_DEMON_DELAY_MS * 2));
 
     mjs_return(mjs, MJS_OK);
-    ESP_LOGD(TAG_SMARTLED, "END FADE");
+    // ESP_LOGD(TAG_SMARTLED, "END FADE");
 }
 
 static void thingjsSmartLEDReconfigChannel(struct mjs *mjs) {
-    ESP_LOGD(TAG_SMARTLED, "START RECONFIG CHANNEL");
+    // ESP_LOGD(TAG_SMARTLED, "START RECONFIG CHANNEL");
     //Get this mjs object (context)
     const mjs_val_t this_obj = mjs_get_this(mjs);
     //Get inverse mode
@@ -243,7 +243,7 @@ static void thingjsSmartLEDReconfigChannel(struct mjs *mjs) {
 
         //Get duty param (if found)
         const mjs_val_t mjs_duty = mjs_get(mjs, arg0, DEF_STR_DUTY, ~0);
-        if(mjs_is_number(mjs_inverse))
+        if(mjs_is_number(mjs_duty))
             duty = mjs_get_int32(mjs, mjs_duty);
     }
 
@@ -275,11 +275,11 @@ static void thingjsSmartLEDReconfigChannel(struct mjs *mjs) {
     }
 
     mjs_return(mjs, MJS_OK);
-    ESP_LOGD(TAG_SMARTLED, "END RECONFIG CHANNEL");
+    // ESP_LOGD(TAG_SMARTLED, "END RECONFIG CHANNEL");
 }
 
 static void thingjsSmartLEDReconfigDriver(struct mjs *mjs) {
-    ESP_LOGD(TAG_SMARTLED, "START RECONFIG DRIVER");
+    // ESP_LOGD(TAG_SMARTLED, "START RECONFIG DRIVER");
     //Get this mjs object (context)
     const mjs_val_t this_obj = mjs_get_this(mjs);
 
@@ -324,7 +324,7 @@ static void thingjsSmartLEDReconfigDriver(struct mjs *mjs) {
     }
 
     mjs_return(mjs, MJS_OK);
-    ESP_LOGD(TAG_SMARTLED, "END RECONFIG DRIVER");
+    // ESP_LOGD(TAG_SMARTLED, "END RECONFIG DRIVER");
 }
 
 mjs_val_t thingjsSmartLEDConstructor(struct mjs *mjs, cJSON *params) {
