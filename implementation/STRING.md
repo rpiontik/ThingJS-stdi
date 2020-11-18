@@ -7,21 +7,33 @@ The method returns a string representing the specified object.
 
 Syntax
 ```text
-str.toString()
+toString(any)
 ```
 
 Example
 ```js
-$res.string(123).toString(); //"123" 
+$res.string.toString(123); //"123" 
+```
+
+## replaceAll()
+The method returns a new string with all matches of a string replaced by a replacement. 
+
+Syntax
+```text
+replaceAll(any, substr, newSubstr)
+```
+
+Example
+```js
+$res.string.replaceAll(123, 1, "test|"); //"test|23" 
+$res.string.replaceAll(123, "", "|"); //"|1|2|3"
+$res.string.replaceAll(123, 2, ""); //"13"
 ```
 
 # Files
 1. tgsi_string.h
 2. tgsi_string.c
 2. BIT_STRING.md
-
-# Sample application
-[Lucerna](https://github.com/rpiontik/ThingJS-front/tree/master/src/applications/lucerna) LED Controller for aquarium 
 
 # Licensing
 
