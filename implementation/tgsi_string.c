@@ -3,6 +3,7 @@
  *      Author: rpiontik
  */
 
+#include <esp_log.h>
 #include "tgsi_string.h"
 #include "string.h"
 
@@ -15,6 +16,7 @@ const char TAG_STRING[] = INTERFACE_NAME;
 const char DEF_STR_CONTEXT[] = "$c";
 const char DEF_STR_TO_STRING[] = "toString";
 const char DEF_STR_REPLACE_ALL[] = "replaceAll";
+const char DEF_STR_SPLIT[] = "split";
 
 
 static char * thingjsCoreToString(struct mjs *mjs, mjs_val_t context) {
@@ -115,12 +117,45 @@ static mjs_val_t thingjsReplaceAll(struct mjs *mjs) {
     return MJS_OK;
 }
 
+static mjs_val_t thingjsSplit(struct mjs *mjs) {
+    char * string = thingjsCoreToString(mjs, mjs_arg(mjs, 0)); //Base string
+    char * split = thingjsCoreToString(mjs, mjs_arg(mjs, 1)); //Old word
+    int split_len = strlen(split);
+    mjs_val_t limit_ = mjs_arg(mjs, 2);
+    int limit = mjs_is_number(limit_) ? mjs_get_int(mjs, limit_) : -1;
+    mjs_val_t result = mjs_mk_array(mjs);
+
+    int i = 0;
+    int start = 0;
+    for(; (limit != 0) && string[i]; i++) {
+        if ((strstr(&string[i], split) == &string[i])) {
+            mjs_array_push(mjs, result, mjs_mk_string(mjs, &string[start], i - start, 1));
+            start = i + split_len;
+            i = start - 1;
+            if(limit > 0) limit--;
+        }
+    }
+
+    if(limit != 0) {
+        mjs_array_push(mjs, result, mjs_mk_string(mjs, &string[start], i - start, 1));
+    }
+
+    free(split);
+    free(string);
+
+    mjs_return(mjs, result);
+
+    return MJS_OK;
+}
+
 mjs_val_t thingjsStringConstructor(struct mjs *mjs, cJSON *params) {
     mjs_val_t this = mjs_mk_object(mjs);
     stdi_setProtectedProperty(mjs, this, DEF_STR_TO_STRING,
                               mjs_mk_foreign_func(mjs, (mjs_func_ptr_t) thingjsToString));
     stdi_setProtectedProperty(mjs, this, DEF_STR_REPLACE_ALL,
                               mjs_mk_foreign_func(mjs, (mjs_func_ptr_t) thingjsReplaceAll));
+    stdi_setProtectedProperty(mjs, this, DEF_STR_SPLIT,
+                              mjs_mk_foreign_func(mjs, (mjs_func_ptr_t) thingjsSplit));
 
     return this;
 }

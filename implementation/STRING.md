@@ -15,6 +15,22 @@ Example
 $res.string.toString(123); //"123" 
 ```
 
+## split()
+The method divides a String into an ordered list of substrings, puts these substrings into an array, 
+and returns the array.  
+
+Syntax
+```text
+split(any,[separator[, limit]])
+```
+
+Example
+```js
+$res.string.split(123, 2); //["1","3"] 
+$res.string.split("fo|go|do", "|", 2); //["fo","go"]
+$res.string.split(123, ""); //["","1","2","3"]
+```
+
 ## replaceAll()
 The method returns a new string with all matches of a string replaced by a replacement. 
 
