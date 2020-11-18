@@ -1,5 +1,5 @@
 /*
- *  Created on: 21 мар. 2019 г.
+ *  Created on: 22.09.2020
  *      Author: rpiontik
  */
 
@@ -11,13 +11,10 @@
 #include "thingjs_core.h"
 
 #define  INTERFACE_NAME "sys_info"
-const char TAG_SYS_INFO[] = INTERFACE_NAME;
 
 char * chip_id = "";
 
 mjs_val_t thingjsSysInfoConstructor(struct mjs *mjs, cJSON *params) {
-    //Validate preset params
-    //The params must have pin number
     if (!cJSON_IsNumber(params))
         return MJS_UNDEFINED;
 
@@ -46,13 +43,13 @@ void thingjsMakeChipID() {
 void thingjsSysInfoRegister(void) {
     thingjsMakeChipID();
 
-    static int thingjs_timer_cases[] = DEF_CASES(DEF_CASE(RES_VIRTUAL));
+    static int thingjs_sys_info_cases[] = DEF_CASES(DEF_CASE(RES_VIRTUAL));
 
     static const struct st_thingjs_interface_manifest interface = {
             .type           = INTERFACE_NAME,
             .constructor    = thingjsSysInfoConstructor,
             .destructor     = NULL,
-            .cases          = thingjs_timer_cases
+            .cases          = thingjs_sys_info_cases
     };
 
     thingjsRegisterInterface(&interface);
