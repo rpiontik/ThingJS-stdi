@@ -19,17 +19,22 @@ const char DEF_STR_REPLACE_ALL[] = "replaceAll";
 
 static char * thingjsCoreToString(struct mjs *mjs, mjs_val_t context) {
     char * result = NULL;
-    if(mjs_is_string(context)) {
+    if(mjs_is_undefined(context)) {
+        const char udf[] = "undefined";
+        result = malloc(10);
+        memcpy(result, udf, 10);
+    } else if(mjs_is_string(context)) {
         size_t len;
         mjs_val_t tmp = context;
         const char * buf = mjs_get_string(mjs, &tmp, &len);
-        result = malloc(len);
+        result = malloc(len+1);
         memcpy(result, buf, len);
-    } if(mjs_is_object(context)) {
+        result[len] = '\0';
+    } else if(mjs_is_object(context)) {
         const char obj[] = "[object Object]";
         result = malloc(16);
-        snprintf(result, 16, "%s", obj);
-    }  if(mjs_is_array(context)) {
+        memcpy(result, obj, 16);
+    } else if(mjs_is_array(context)) {
         //todo нужно реализовать
     } else {
         mjs_json_stringify(mjs, context, NULL, 0, &result);
@@ -38,32 +43,32 @@ static char * thingjsCoreToString(struct mjs *mjs, mjs_val_t context) {
 }
 
 static mjs_val_t thingjsToString(struct mjs *mjs) {
-    char * str = thingjsCoreToString(mjs, mjs_get(mjs, mjs_get_this(mjs), DEF_STR_CONTEXT, ~0));
-    mjs_val_t result = MJS_UNDEFINED;
+    char * str = thingjsCoreToString(mjs, mjs_arg(mjs, 0));
+    mjs_val_t result = MJS_OK;
     if(str) {
-        result = mjs_mk_string(mjs, str, ~0, 1);
+        mjs_return(mjs, mjs_mk_string(mjs, str, ~0, 1));
         free(str);
-    }
+    } else
+        result = MJS_INTERNAL_ERROR;
+
     return result;
 }
 
 static mjs_val_t thingjsReplaceAll(struct mjs *mjs) {
     //Based on https://www.geeksforgeeks.org/c-program-replace-word-text-another-given-word/
-    mjs_val_t oldW_ = mjs_arg(mjs, 0);   //Old word
-    const mjs_val_t this = mjs_get_this(mjs);
-    if(mjs_is_undefined(oldW_))
-        return this;
-
-    char * oldW = thingjsCoreToString(mjs, oldW_); //Old word
-    char * newW = thingjsCoreToString(mjs, mjs_arg(mjs, 1)); //New word
-    char * str = thingjsCoreToString(mjs, mjs_get(mjs, this, DEF_STR_CONTEXT, ~0));
-    if(!str){
-        free(oldW);
-        free(newW);
+    char * string = thingjsCoreToString(mjs, mjs_arg(mjs, 0)); //Base string
+    char * oldW = thingjsCoreToString(mjs, mjs_arg(mjs, 1)); //Old word
+    char * newW = thingjsCoreToString(mjs, mjs_arg(mjs, 2)); //New word
+    if(!string || !oldW || !newW){
+        if(string) free(string);
+        if(oldW) free(oldW);
+        if(newW) free(newW);
+        mjs_return(mjs, MJS_INTERNAL_ERROR);
         return MJS_INTERNAL_ERROR;
     }
 
     char* result;
+    char* str = string;
     int i, cnt = 0;
     int newWlen = strlen(newW);
     int oldWlen = strlen(oldW);
@@ -71,10 +76,10 @@ static mjs_val_t thingjsReplaceAll(struct mjs *mjs) {
     // Counting the number of times old word
     // occur in the string
     for (i = 0; str[i] != '\0'; i++) {
-        if (strstr(&str[i], oldW) == &str[i]) {
+        if (!oldWlen || (strstr(&str[i], oldW) == &str[i])) {
             cnt++;
             // Jumping to index after the old word.
-            i += oldWlen - 1;
+            i += oldWlen - (!oldWlen ? 0 : 1);
         }
     }
 
@@ -84,7 +89,11 @@ static mjs_val_t thingjsReplaceAll(struct mjs *mjs) {
     i = 0;
     while (*str) {
         // compare the substring with the result
-        if (strstr(str, oldW) == str) {
+        if(!oldWlen) {
+            strcpy(&result[i], newW);
+            i += newWlen;
+            result[i++] = *str++;
+        } else if ((strstr(str, oldW) == str)) {
             strcpy(&result[i], newW);
             i += newWlen;
             str += oldWlen;
@@ -97,29 +106,23 @@ static mjs_val_t thingjsReplaceAll(struct mjs *mjs) {
 
     free(oldW);
     free(newW);
-    free(str);
+    free(string);
 
-    const mjs_val_t ret = mjs_mk_string(mjs, result, ~0, 1);
+    mjs_return(mjs, mjs_mk_string(mjs, result, i, 1));
 
     free(result);
 
-    return ret;
+    return MJS_OK;
 }
 
-static mjs_val_t thingjsString(struct mjs *mjs) {
-    //Create mJS interface object
+mjs_val_t thingjsStringConstructor(struct mjs *mjs, cJSON *params) {
     mjs_val_t this = mjs_mk_object(mjs);
-    stdi_setProtectedProperty(mjs, this, DEF_STR_CONTEXT, mjs_arg(mjs, 0));
     stdi_setProtectedProperty(mjs, this, DEF_STR_TO_STRING,
                               mjs_mk_foreign_func(mjs, (mjs_func_ptr_t) thingjsToString));
     stdi_setProtectedProperty(mjs, this, DEF_STR_REPLACE_ALL,
                               mjs_mk_foreign_func(mjs, (mjs_func_ptr_t) thingjsReplaceAll));
 
     return this;
-}
-
-mjs_val_t thingjsStringConstructor(struct mjs *mjs, cJSON *params) {
-    return mjs_mk_foreign_func(mjs, (mjs_func_ptr_t) thingjsString);
 }
 
 void thingjsStringRegister(void) {
