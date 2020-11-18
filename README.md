@@ -19,6 +19,7 @@ git submodule add git@github.com:rpiontik/ThingJS-stdi.git components/thingjs_st
 5. [SmartLED](/implementation/SMART_LED.md) - Smart LED interface;
 6. [DS18X20](/implementation/DS18X20.md) - DS18X20 interface;
 7. [mqttc](/implementation/MQTT_CLIENT.md) - MQTT client.
+8. [sys_info](/implementation/SYS_INFO.md) - System information.
 
 # Thankful
 * [JetBrains](https://www.jetbrains.com/) for OpenSource license.
