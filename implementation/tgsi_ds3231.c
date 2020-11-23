@@ -29,8 +29,8 @@ static const int rtc_i2c_port = I2C_NUM_0;
 #define ACK_VAL                             0x0              /*!< I2C ack value */
 #define NACK_VAL                            0x1              /*!< I2C nack value */
 
-#define DEF_RTC_SDA                         GPIO19
-#define DEF_RTC_SCL                         GPIO18
+#define DEF_RTC_SDA                         GPIO15
+#define DEF_RTC_SCL                         GPIO4
 
 inline uint8_t bcd2dec(uint8_t b) {
     return ((b/16 * 10) + (b % 16));
