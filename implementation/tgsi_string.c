@@ -17,7 +17,10 @@ const char DEF_STR_CONTEXT[] = "$c";
 const char DEF_STR_TO_STRING[] = "toString";
 const char DEF_STR_REPLACE_ALL[] = "replaceAll";
 const char DEF_STR_SPLIT[] = "split";
+const char DEF_STR_TEMPLATE[] = "template";
 
+const char DEF_OPEN_TEMPLATE[] = "{{";
+const char DEF_CLOSE_TEMPLATE[] = "}}";
 
 static char * thingjsCoreToString(struct mjs *mjs, mjs_val_t context) {
     char * result = NULL;
@@ -148,6 +151,64 @@ static mjs_val_t thingjsSplit(struct mjs *mjs) {
     return MJS_OK;
 }
 
+struct str {
+    char * buffer;
+    int length;
+};
+
+static void appendString(struct str * str, char * append, int length) {
+    str->buffer = realloc(str->buffer, str->length + length);
+    memcpy(&str->buffer[str->length], append, length);
+    str->length += length;
+}
+
+static mjs_val_t thingjsTemplate(struct mjs *mjs) {
+    char * template = thingjsCoreToString(mjs, mjs_arg(mjs, 0)); //Template
+    int i = 0;
+    int start = -1;
+    int offset = 0;
+    struct str result = {
+            .length = 0,
+            .buffer = malloc(1)
+    };
+    char * script = malloc(1);
+    int script_buf_size = 0;
+    for(; template[i]; i++) {
+        if((start == -1) && (*(uint16_t*)DEF_OPEN_TEMPLATE) == (*(uint16_t*)&template[i])) {
+            appendString(&result, &template[offset], i - offset);
+            start = i + 2;
+        } else if((start > -1) && (*(uint16_t*)DEF_CLOSE_TEMPLATE) == (*(uint16_t*)&template[i])) {
+            int script_length = i - start;
+            if(script_buf_size < script_length) {
+                script_buf_size = script_length + 4;
+                script = realloc(script, script_buf_size);
+            }
+            snprintf(script, script_buf_size, "(%.*s);", script_length, &template[start]);
+
+            mjs_val_t res = MJS_UNDEFINED;
+            mjs_eval(mjs, script, &res);
+
+            char * eval_result = thingjsCoreToString(mjs, res);
+            appendString(&result, eval_result, strlen(eval_result));
+
+            free(eval_result);
+            offset = i + 2;
+            start = -1;
+        }
+    }
+
+    appendString(&result, &template[offset], i - offset);
+
+    mjs_return(mjs, mjs_mk_string(mjs, result.buffer, result.length, 1));
+    free(template);
+    free(script);
+    free(result.buffer);
+
+    mjs_gc(mjs, true);
+
+    return MJS_OK;
+}
+
 mjs_val_t thingjsStringConstructor(struct mjs *mjs, cJSON *params) {
     mjs_val_t this = mjs_mk_object(mjs);
     stdi_setProtectedProperty(mjs, this, DEF_STR_TO_STRING,
@@ -156,7 +217,8 @@ mjs_val_t thingjsStringConstructor(struct mjs *mjs, cJSON *params) {
                               mjs_mk_foreign_func(mjs, (mjs_func_ptr_t) thingjsReplaceAll));
     stdi_setProtectedProperty(mjs, this, DEF_STR_SPLIT,
                               mjs_mk_foreign_func(mjs, (mjs_func_ptr_t) thingjsSplit));
-
+    stdi_setProtectedProperty(mjs, this, DEF_STR_TEMPLATE,
+                              mjs_mk_foreign_func(mjs, (mjs_func_ptr_t) thingjsTemplate));
     return this;
 }
 
