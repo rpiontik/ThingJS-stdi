@@ -204,8 +204,6 @@ static mjs_val_t thingjsTemplate(struct mjs *mjs) {
     free(script);
     free(result.buffer);
 
-    mjs_gc(mjs, true);
-
     return MJS_OK;
 }
 
