@@ -4,6 +4,7 @@
  */
 
 #include <esp_log.h>
+#include <mongoose.h>
 #include "tgsi_string.h"
 #include "string.h"
 
@@ -18,6 +19,7 @@ const char DEF_STR_TO_STRING[] = "toString";
 const char DEF_STR_REPLACE_ALL[] = "replaceAll";
 const char DEF_STR_SPLIT[] = "split";
 const char DEF_STR_TEMPLATE[] = "template";
+const char DEF_STR_MUSTACHE[] = "mustache";
 
 const char DEF_OPEN_TEMPLATE[] = "{{";
 const char DEF_CLOSE_TEMPLATE[] = "}}";
@@ -207,6 +209,105 @@ static mjs_val_t thingjsTemplate(struct mjs *mjs) {
     return MJS_OK;
 }
 
+static int32_t thingjsMustacheParse(
+        struct mjs *mjs, mjs_val_t context,
+        struct mbuf *mbuf,
+        const char * template, uint16_t offset,
+        const char * sec_name, int sec_name_len,
+        bool visible) {
+    int mustache_start = -1;
+    int part_start = offset;
+    int i = offset;
+    for(; template[i]; i++) {
+        if((mustache_start == -1) && (*(uint16_t*)DEF_OPEN_TEMPLATE) == (*(uint16_t*)&template[i])) {
+            if(visible) mbuf_append(mbuf, &template[part_start], i - part_start);
+            mustache_start = i + 2;
+        } else if((mustache_start > -1) && (*(uint16_t*)DEF_CLOSE_TEMPLATE) == (*(uint16_t*)&template[i])) {
+            enum {st_begin_pos, st_begin_neg, st_exp} mustache_type = st_exp;
+            int mustache_len = i - mustache_start;
+            switch(template[mustache_start]) {
+                case '#':
+                    mustache_type = st_begin_pos;
+                    mustache_start++;
+                    mustache_len--;
+                    break;
+                case '^':
+                    mustache_type = st_begin_neg;
+                    mustache_start++;
+                    mustache_len--;
+                    break;
+                case '/':
+                    mustache_start++;
+                    if(!sec_name || (strncmp(sec_name, &template[mustache_start], sec_name_len) != 0)) {
+                        mjs_return(mjs, MJS_INTERNAL_ERROR);
+                        mjs_set_errorf(mjs, MJS_INTERNAL_ERROR, "%s: Mustache syntax error at %d char for section [%.*s]",
+                                       pcTaskGetTaskName(NULL), i, sec_name_len, sec_name ? sec_name : "");
+                        return -1;
+                    }
+                    return i + 2;
+                case '!':
+                    mustache_start = -1;
+                    part_start = i + 1;
+                    i++;
+                    continue;
+            }
+            mjs_val_t value = mjs_get(mjs, context, &template[mustache_start], mustache_len);
+            if(mjs_is_array(value)) {
+                int jump = -1;
+                for(int l=0; l < mjs_array_length(mjs, value); l++) {
+                    jump = thingjsMustacheParse(mjs, mjs_array_get(mjs, value, l), mbuf,
+                                                        template, i + 2,
+                                                        &template[mustache_start], mustache_len,
+                                                        visible
+                                                );
+                }
+                if(jump<0) return -1;
+                i = jump - 1;
+            } else if (mustache_type == st_exp) {
+                if(visible && !mjs_is_undefined(value)) {
+                    char *exp = thingjsCoreToString(mjs, value);
+                    mbuf_append(mbuf, exp, strlen(exp));
+                    free(exp);
+                }
+                i++;
+            } else {
+                ESP_LOGD(TAG_STRING, "Section [%.*s] type of %s as int %d", mustache_len, &template[mustache_start], mjs_typeof(value), mjs_get_int(mjs, value));
+                int32_t jump = thingjsMustacheParse(mjs, mjs_is_boolean(value) ? context : value, mbuf,
+                                    template, i + 2,
+                                    &template[mustache_start], mustache_len,
+                                    visible && (
+                                            mjs_is_object(value)
+                                            || mjs_get_bool(mjs, value)
+                                            || (mjs_is_number(value) && (mjs_get_int(mjs, value) != 0)))
+                                );
+                if(jump < 0) return -1;
+                i = jump - 1;
+            }
+            mustache_start = -1;
+            part_start = i + 1;
+        }
+    }
+
+    if(visible) mbuf_append(mbuf, &template[part_start], i - part_start);
+
+    return i;
+}
+
+static mjs_val_t thingjsMustache(struct mjs *mjs) {
+    char * template = thingjsCoreToString(mjs, mjs_arg(mjs, 0)); //Template
+    struct mbuf buff = {0};
+    mbuf_init(&buff, 1);
+    buff.buf[0] = '\0';
+
+    if(thingjsMustacheParse(mjs, mjs_arg(mjs, 1), &buff, template, 0, NULL, 0, true) >= 0) {
+        mjs_return(mjs, mjs_mk_string(mjs, buff.buf, buff.len, 1));
+    }
+
+    mbuf_free(&buff);
+
+    return MJS_OK;
+}
+
 mjs_val_t thingjsStringConstructor(struct mjs *mjs, cJSON *params) {
     mjs_val_t this = mjs_mk_object(mjs);
     stdi_setProtectedProperty(mjs, this, DEF_STR_TO_STRING,
@@ -217,6 +318,8 @@ mjs_val_t thingjsStringConstructor(struct mjs *mjs, cJSON *params) {
                               mjs_mk_foreign_func(mjs, (mjs_func_ptr_t) thingjsSplit));
     stdi_setProtectedProperty(mjs, this, DEF_STR_TEMPLATE,
                               mjs_mk_foreign_func(mjs, (mjs_func_ptr_t) thingjsTemplate));
+    stdi_setProtectedProperty(mjs, this, DEF_STR_MUSTACHE,
+                              mjs_mk_foreign_func(mjs, (mjs_func_ptr_t) thingjsMustache));
     return this;
 }
 
