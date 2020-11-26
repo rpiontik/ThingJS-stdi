@@ -80,7 +80,7 @@ int init_driver(ow_driver_ptr *d, int uart, int rx, int tx)
 
 	if (uart_param_config((*d)->uart, &uart_config) != ESP_OK) { return OW_ERR; }
 	if (uart_set_pin((*d)->uart, tx, rx, ECHO_TEST_RTS, ECHO_TEST_CTS) != ESP_OK) { return OW_ERR; }
-	//if (uart_set_line_inverse((*d)->uart, UART_INVERSE_TXD) != ESP_OK) { return OW_ERR; }
+	if (uart_set_line_inverse((*d)->uart, UART_INVERSE_TXD) != ESP_OK) { return OW_ERR; }
 	if (uart_driver_install((*d)->uart, UART_FIFO_LEN*2, 0, 0, NULL, 0) != ESP_OK) { return OW_ERR; }
 
 	return OW_OK;
