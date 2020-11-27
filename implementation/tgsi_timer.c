@@ -20,6 +20,8 @@
 
 const char TAG_TIMER[] = INTERFACE_NAME;
 const char SYS_PROP_JOBS[] = "$jobs";
+const char SYS_PROP_HANDLE[] = "handle";
+const char SYS_PROP_DATA[] = "data";
 
 struct timer_params {
     TaskHandle_t process;   //Context owner
@@ -76,9 +78,13 @@ static void thingjsRunTimer(struct mjs *mjs, bool is_interval) {
             mjs_set_errorf(mjs, MJS_INTERNAL_ERROR, "Error of starting timer");
             mjs_return(mjs, MJS_INTERNAL_ERROR);
         } else {
-            mjs_val_t timer_foreign = mjs_mk_foreign(mjs, timer_handle);
-            mjs_array_push(mjs, jobs, timer_foreign);
-            mjs_return(mjs, timer_foreign);
+            mjs_val_t timer_job = mjs_mk_object(mjs);
+            mjs_val_t mjs_handle = mjs_mk_foreign(mjs, timer_handle);
+            if(!mjs_is_undefined(arg2))
+                stdi_setProtectedProperty(mjs, timer_job, SYS_PROP_DATA, arg2);
+            stdi_setProtectedProperty(mjs, timer_job, SYS_PROP_HANDLE, mjs_handle);
+            mjs_array_push(mjs, jobs, timer_job);
+            mjs_return(mjs, mjs_handle);
         }
     } else {
         mjs_set_errorf(mjs, MJS_INTERNAL_ERROR, "%s/%s: Incorrect params of function setTimeout", app_name, TAG_TIMER);
@@ -107,7 +113,8 @@ static inline void thingjsClearTimer(struct mjs *mjs) {
 
         //Remove timer from jobs
         for(long i = mjs_array_length(mjs, jobs) - 1; i >= 0; i--) {
-            if(mjs_array_get(mjs, jobs, i) == foreign) {
+            mjs_val_t job = mjs_array_get(mjs, jobs, i);
+            if(mjs_get(mjs, job, SYS_PROP_HANDLE, ~0)  == foreign) {
                 timer_index = i;
                 break;
             }
@@ -163,7 +170,9 @@ void thingjsTimersDestructor(struct mjs * mjs, mjs_val_t subject) {
     if (mjs_is_array(jobs)) {
         //Remove timer from jobs
         for(long i = mjs_array_length(mjs, jobs) - 1; i >= 0; i--) {
-            xTimerDelete(mjs_get_ptr(mjs, mjs_array_get(mjs, jobs, i)), 0);
+            mjs_val_t job = mjs_array_get(mjs, jobs, i);
+            mjs_val_t handle = mjs_get(mjs, job, SYS_PROP_HANDLE, ~0);
+            xTimerDelete(mjs_get_ptr(mjs, handle), 0);
         }
     } else {
         ESP_LOGE(TAG_TIMER, "Fatal error of timer destructor");

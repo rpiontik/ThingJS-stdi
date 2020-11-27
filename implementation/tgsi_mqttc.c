@@ -139,6 +139,7 @@ static void thingjs_mqtt_event_handler(void *handler_args, esp_event_base_t base
             break;
     }
 
+    //todo MAYBE PROBLEM WITH CALLBACK DATA (VARIABLE COLLECTION IN MJS)
     if (pdTRUE != thingjsSendCallbackRequest(callback_data->context->process, thingjs_mqtt_event_callback, callback_data)) {
         free(callback_data);
         ESP_LOGE(TAG_MQTT, "Event stack is full! Event [%d] message [%d]", event->event_id, event->msg_id);
