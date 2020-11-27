@@ -4,9 +4,8 @@
  */
 
 #include "tgsi_dac.h"
-
 #include "driver/dac.h"
-
+#include <esp_log.h>
 #include "sdti_utils.h"
 #include "thingjs_board.h"
 #include "thingjs_core.h"
@@ -18,11 +17,15 @@ dac_channel_t getDacChannel(struct mjs *mjs) {
     //Get this object that store params
     mjs_val_t this_obj = mjs_get_this(mjs);
     //Get internal params
-    uint32_t gpio = mjs_get_int32(mjs, mjs_get(mjs, this_obj, "gpio", ~0));
+    uint32_t gpio = mjs_get_int32(mjs, mjs_get(mjs, this_obj, "dac", ~0));
     //return channel number
+    ESP_LOGD(TAG_DAC, "GPIO: %d", gpio);
     if ( gpio == DAC_CHANNEL_1_GPIO_NUM ) return DAC_CHANNEL_1;
     else if ( gpio == DAC_CHANNEL_2_GPIO_NUM) return DAC_CHANNEL_2;
-    else return DAC_CHANNEL_MAX;
+    else {
+        ESP_LOGE(TAG_DAC, "GPIO: %d", gpio);
+        return DAC_CHANNEL_MAX;
+    }
 }
 
 // Set DAC output voltage.
