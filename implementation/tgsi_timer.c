@@ -43,7 +43,7 @@ static void thingjsRunTimer(struct mjs *mjs, bool is_interval) {
     //Get function params
     mjs_val_t arg0 = mjs_arg(mjs, 0);   //Callback function
     mjs_val_t arg1 = mjs_arg(mjs, 1);   //Interval
-    mjs_val_t arg3 = mjs_arg(mjs, 2);   //Custom data
+    mjs_val_t arg2 = mjs_arg(mjs, 2);   //Custom data
     mjs_val_t this = mjs_get_this(mjs); //this interface object
     mjs_val_t jobs = mjs_get(mjs, this, SYS_PROP_JOBS, ~0); //Active timer's jobs
 
@@ -61,8 +61,7 @@ static void thingjsRunTimer(struct mjs *mjs, bool is_interval) {
         params->context = mjs;
         params->is_interval = is_interval;
         params->callback = arg0;
-        params->params = arg3;
-
+        params->params = arg2;
 
         TimerHandle_t timer_handle = xTimerCreate(
                 timer_name,
