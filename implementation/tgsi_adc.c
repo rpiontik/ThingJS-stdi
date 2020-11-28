@@ -133,18 +133,8 @@ mjs_val_t thingjsAdcConstructor(struct mjs *mjs, cJSON *params) {
     cJSON * resolutionj = cJSON_GetArrayItem(params, 1);
     cJSON * attenj = cJSON_GetArrayItem(params, 2);
 
-    if (!cJSON_IsNumber(gpioj) || !cJSON_IsNumber(gpioj) ) {
-        mjs_set_errorf(mjs, MJS_INTERNAL_ERROR, "%s: Incorrect GPIO params", TAG_ADC);
-        mjs_return(mjs, MJS_INTERNAL_ERROR);
-        return MJS_UNDEFINED;
-    }
-    if (!cJSON_IsNumber(resolutionj) || !cJSON_IsNumber(resolutionj) ) {
-        mjs_set_errorf(mjs, MJS_INTERNAL_ERROR, "%s: Incorrect resolution param", TAG_ADC);
-        mjs_return(mjs, MJS_INTERNAL_ERROR);
-        return MJS_UNDEFINED;
-    }
-    if (!cJSON_IsNumber(attenj) || !cJSON_IsNumber(attenj) ) {
-        mjs_set_errorf(mjs, MJS_INTERNAL_ERROR, "%s: Incorrect attenuation param", TAG_ADC);
+    if (!cJSON_IsNumber(gpioj) || !cJSON_IsNumber(resolutionj) || !cJSON_IsNumber(attenj) ) {
+        mjs_set_errorf(mjs, MJS_INTERNAL_ERROR, "%s: Incorrect params", TAG_ADC);
         mjs_return(mjs, MJS_INTERNAL_ERROR);
         return MJS_UNDEFINED;
     }
