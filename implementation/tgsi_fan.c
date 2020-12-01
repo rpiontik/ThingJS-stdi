@@ -68,14 +68,14 @@ static fan_state_t fanState = {
  *  - set up the input filter
  *  - set up the counter events to watch
  */
-static esp_err_t pcnt_init(gpio_num_t gpio) {
+static esp_err_t pcnt_init(pcnt_unit_t unit, gpio_num_t gpio) {
     /* Prepare configuration for the PCNT unit */
     pcnt_config_t pcnt_config = {
             // Set PCNT input signal and control GPIOs
             .pulse_gpio_num = gpio,
             .ctrl_gpio_num = -1,
             .channel = PCNT_CHANNEL,
-            .unit = PCNT_UNIT,
+            .unit = unit,
             // What to do on the positive / negative edge of pulse input?
             .pos_mode = PCNT_COUNT_INC,   // Count up on the positive edge
             .neg_mode = PCNT_COUNT_DIS,   // Keep the counter value on the negative edge
@@ -166,7 +166,7 @@ _Noreturn static void thingjsFanDaemon(void *data) {
 
 mjs_val_t thingjsFanConstructor(struct mjs *mjs, cJSON *params) {
     //Validate preset params
-    if (!cJSON_IsArray(params) || !(cJSON_GetArraySize(params) == 3)) {
+    if (!cJSON_IsArray(params) || !(cJSON_GetArraySize(params) == 4)) {
         mjs_set_errorf(mjs, MJS_INTERNAL_ERROR, "%s: Incorrect params", TAG_FAN);
         mjs_return(mjs, MJS_INTERNAL_ERROR);
         return MJS_UNDEFINED;
@@ -174,9 +174,10 @@ mjs_val_t thingjsFanConstructor(struct mjs *mjs, cJSON *params) {
 
     cJSON * gpioDacj = cJSON_GetArrayItem(params, 0); // DAC Gpio
     cJSON * gpioAdcj = cJSON_GetArrayItem(params, 1); // ADC Gpio
-    cJSON * gpioCntj = cJSON_GetArrayItem(params, 2); // TAH/RPM Gpio
+    cJSON * pcntUnitj = cJSON_GetArrayItem(params, 2); // TAH/RPM Unit
+    cJSON * pcntGpioj = cJSON_GetArrayItem(params, 3); // TAH/RPM Gpio
 
-    if (!cJSON_IsNumber(gpioDacj) || !cJSON_IsNumber(gpioAdcj) || !cJSON_IsNumber(gpioCntj) ) {
+    if (!cJSON_IsNumber(gpioDacj) || !cJSON_IsNumber(gpioAdcj) || !cJSON_IsNumber(pcntUnitj) || !cJSON_IsNumber(pcntGpioj) ) {
         mjs_set_errorf(mjs, MJS_INTERNAL_ERROR, "%s: Incorrect GPIO params", TAG_FAN);
         mjs_return(mjs, MJS_INTERNAL_ERROR);
         return MJS_UNDEFINED;
@@ -264,7 +265,39 @@ mjs_val_t thingjsFanConstructor(struct mjs *mjs, cJSON *params) {
     adc1_config_channel_atten( fanConfig.adcChannel, ADC_ATTEN );
 
     // PCNT Init
-    if ( ESP_OK != pcnt_init ((gpio_num_t)gpioCntj->valueint) ){
+    pcnt_unit_t u;
+    switch (pcntUnitj->valueint) {
+        case RES_PCNT_0:
+            u = PCNT_UNIT_0;
+            break;
+        case RES_PCNT_1:
+            u = PCNT_UNIT_1;
+            break;
+        case RES_PCNT_2:
+            u = PCNT_UNIT_2;
+            break;
+        case RES_PCNT_3:
+            u = PCNT_UNIT_3;
+            break;
+        case RES_PCNT_4:
+            u = PCNT_UNIT_4;
+            break;
+        case RES_PCNT_5:
+            u = PCNT_UNIT_5;
+            break;
+        case RES_PCNT_6:
+            u = PCNT_UNIT_6;
+            break;
+        case RES_PCNT_7:
+            u = PCNT_UNIT_7;
+            break;
+        default:
+            mjs_set_errorf(mjs, MJS_INTERNAL_ERROR, "%s: PCNT unit param error", TAG_FAN);
+            mjs_return(mjs, MJS_INTERNAL_ERROR);
+            return MJS_UNDEFINED;
+    }
+
+    if ( ESP_OK != pcnt_init ( u ,(gpio_num_t)pcntGpioj->valueint) ){
         mjs_set_errorf(mjs, MJS_INTERNAL_ERROR, "%s: PCNT init error", TAG_FAN);
         mjs_return(mjs, MJS_INTERNAL_ERROR);
         return MJS_UNDEFINED;
@@ -303,6 +336,7 @@ void thingjsFanRegister(void) {
                     DEF_ENUM( DEF_CASE(GPIO25), DEF_CASE(GPIO26) ), // DAC GPIO
                     DEF_ENUM( DEF_CASE(GPIO32), DEF_CASE(GPIO33), DEF_CASE(GPIO34), // ADC GPIO
                               DEF_CASE(GPIO35), DEF_CASE(GPIO36), DEF_CASE(GPIO39)),
+                    DEF_ENUM(RES_PCNT_0, RES_PCNT_1, RES_PCNT_2, RES_PCNT_3, RES_PCNT_4, RES_PCNT_5, RES_PCNT_6, RES_PCNT_7), // PCNT UNIT
                     DEF_ENUM( DEF_CASE(GPIO0),  DEF_CASE(GPIO2), DEF_CASE(GPIO3), DEF_CASE(GPIO4), // PCNT GPIO
                               DEF_CASE(GPIO5),  DEF_CASE(GPIO12), DEF_CASE(GPIO13), DEF_CASE(GPIO14),
                               DEF_CASE(GPIO15), DEF_CASE(GPIO16), DEF_CASE(GPIO17), DEF_CASE(GPIO18),

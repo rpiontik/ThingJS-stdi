@@ -23,14 +23,14 @@ const char TAG_PCNT[] = "PCNT";
  *  - set up the input filter
  *  - set up the counter events to watch
  */
-static esp_err_t pcnt_init(gpio_num_t gpio) {
+static esp_err_t pcnt_init(pcnt_unit_t unit, gpio_num_t gpio) {
     /* Prepare configuration for the PCNT unit */
     pcnt_config_t pcnt_config = {
             // Set PCNT input signal and control GPIOs
             .pulse_gpio_num = gpio,
             .ctrl_gpio_num = -1,
             .channel = PCNT_CHANNEL,
-            .unit = PCNT_UNIT,
+            .unit = unit,
             // What to do on the positive / negative edge of pulse input?
             .pos_mode = PCNT_COUNT_INC,   // Count up on the positive edge
             .neg_mode = PCNT_COUNT_DIS,   // Keep the counter value on the negative edge
@@ -92,27 +92,32 @@ static void thingjsPcntResetCounter (struct mjs *mjs) {
 
 mjs_val_t thingjsPcntConstructor(struct mjs *mjs, cJSON *params) {
     //Validate preset params
-    //The params must have pin number
-    if (!cJSON_IsNumber(params)) {
-        mjs_set_errorf(mjs, MJS_INTERNAL_ERROR, "%s: Incorrect GPIO params", TAG_PCNT);
+    if (!cJSON_IsArray(params) || !(cJSON_GetArraySize(params) == 2)) {
+        mjs_set_errorf(mjs, MJS_INTERNAL_ERROR, "%s: Incorrect params", TAG_PCNT);
         mjs_return(mjs, MJS_INTERNAL_ERROR);
         return MJS_UNDEFINED;
     }
 
-    //Get pin number
-    gpio_num_t gpio = params->valueint;
+    cJSON * unit = cJSON_GetArrayItem(params, 0);
+    cJSON * gpio = cJSON_GetArrayItem(params, 1);
+
+    if (!cJSON_IsNumber(unit) || !cJSON_IsNumber(gpio)) {
+        mjs_set_errorf(mjs, MJS_INTERNAL_ERROR, "%s: Incorrect params", TAG_PCNT);
+        mjs_return(mjs, MJS_INTERNAL_ERROR);
+        return MJS_UNDEFINED;
+    }
 
     //Create mjs object
     mjs_val_t interface = mjs_mk_object(mjs);
 
-    if ( ESP_OK != pcnt_init( (gpio_num_t)gpio ) ) {
+    if ( ESP_OK != pcnt_init( (pcnt_unit_t)unit->valueint , (gpio_num_t)gpio->valueint ) ) {
         mjs_set_errorf(mjs, MJS_INTERNAL_ERROR, "%s: Error to initialise", TAG_PCNT);
         mjs_return(mjs, MJS_INTERNAL_ERROR);
         return MJS_UNDEFINED;
     }
 
     //Add protected property to interface
-    stdi_setProtectedProperty(mjs, interface, "pcnt", mjs_mk_number(mjs, gpio));
+    stdi_setProtectedProperty(mjs, interface, "pcnt", mjs_mk_number(mjs, gpio->valueint));
 
     //Bind functions
     stdi_setProtectedProperty(mjs, interface, "getCount",
@@ -126,13 +131,13 @@ mjs_val_t thingjsPcntConstructor(struct mjs *mjs, cJSON *params) {
 
 void thingjsPcntRegister(void) {
     static int thingjs_pcnt_cases[] = DEF_CASES(
-            DEF_CASE(GPIO0),  DEF_CASE(GPIO2), DEF_CASE(GPIO3), DEF_CASE(GPIO4),
-            DEF_CASE(GPIO5),  DEF_CASE(GPIO12), DEF_CASE(GPIO13), DEF_CASE(GPIO14),
-            DEF_CASE(GPIO15), DEF_CASE(GPIO16), DEF_CASE(GPIO17), DEF_CASE(GPIO18),
-            DEF_CASE(GPIO19), DEF_CASE(GPIO21), DEF_CASE(GPIO22), DEF_CASE(GPIO23),
-            DEF_CASE(GPIO25), DEF_CASE(GPIO26), DEF_CASE(GPIO27), DEF_CASE(GPIO32),
-            DEF_CASE(GPIO33), DEF_CASE(GPIO34), DEF_CASE(GPIO35), DEF_CASE(GPIO36),
-            DEF_CASE(GPIO39)
+            DEF_CASE(
+                    DEF_ENUM(RES_PCNT_0, RES_PCNT_1, RES_PCNT_2, RES_PCNT_3, RES_PCNT_4, RES_PCNT_5, RES_PCNT_6, RES_PCNT_7),
+                    DEF_ENUM(
+                            GPIO2, GPIO4, GPIO5, GPIO13, GPIO14, GPIO15, GPIO16, GPIO17, GPIO18, GPIO19, GPIO21, GPIO22,
+                            GPIO23, GPIO25, GPIO26, GPIO27, GPIO32, GPIO33, GPIO34, GPIO35, GPIO36, GPIO39
+                    )
+            )
     );
 
     static const struct st_thingjs_interface_manifest interface = {
