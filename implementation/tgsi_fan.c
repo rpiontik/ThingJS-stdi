@@ -1,3 +1,4 @@
+#include <dirent.h>
 /*
  *  Created on: 28 nov. 2020 г.
  *      Author: nazguluz
@@ -11,8 +12,12 @@
 #include "sdti_utils.h"
 #include "thingjs_board.h"
 #include "thingjs_core.h"
+#include <freertos/FreeRTOS.h>
+#include "freertos/task.h"
 
 const char TAG_FAN[] = "FAN";
+
+#define FAN_DEMON_DELAY_MS 1000
 
 #define ADC_UNIT  ADC_UNIT_1
 #define ADC_WIDTH ADC_WIDTH_BIT_12
@@ -24,15 +29,17 @@ const char TAG_FAN[] = "FAN";
 #define PCNT_L_LIM_VAL -10
 #define PCNT_FILTER_VALUE 5
 
+static TaskHandle_t fan_demon_handle = 0;
+
 typedef struct {
     dac_channel_t   dacChannel;
     gpio_num_t      dacGpio;
     adc1_channel_t  adcChannel;
     gpio_num_t      adcGpio;
     gpio_num_t      pcntGpio;
-} st_fan_config;
+} fan_config_t;
 
-static st_fan_config fanConfig = {
+static fan_config_t fanConfig = {
     .dacChannel = DAC_CHANNEL_MAX,
     .dacGpio    = GPIO_NUM_NC,
     .adcChannel = ADC1_CHANNEL_MAX,
@@ -40,60 +47,21 @@ static st_fan_config fanConfig = {
     .pcntGpio   = GPIO_NUM_NC
 };
 
-//
-dac_channel_t getDacChannel(struct mjs *mjs) {
-    //Get this object that store params
-    mjs_val_t this_obj = mjs_get_this(mjs);
-    //Get internal params
-    uint32_t gpio = mjs_get_int32(mjs, mjs_get(mjs, this_obj, "dac", ~0));
-    //return channel number
-    if ( gpio == DAC_CHANNEL_1_GPIO_NUM ) return DAC_CHANNEL_1;
-    else if ( gpio == DAC_CHANNEL_2_GPIO_NUM) return DAC_CHANNEL_2;
-    else {
-        ESP_LOGE(TAG_FAN, "GPIO: %d doesn't support DAC", gpio);
-        return DAC_CHANNEL_MAX;
-    }
-}
+typedef struct {
+    int32_t rpm;
+    int32_t adcRaw;
+    uint8_t dac;
+    float value;
+    float tempCurrent;
+} fan_state_t;
 
-// Set DAC output voltage.
-// DAC output is 8-bit. Maximum (255) corresponds to VDD.
-// Note
-// Need to configure DAC pad before calling this function.
-// DAC channel 1 is attached to GPIO25, DAC channel 2 is attached to GPIO26
-static void thingjsDacSetVoltage(struct mjs *mjs) {
-    //Get function params
-    mjs_val_t arg0 = mjs_arg(mjs, 0);
-    //Param validation
-    if (mjs_is_number(arg0)) {
-        /* Set the DAC voltage */
-        uint32_t val = mjs_get_int32(mjs, arg0);
-        if (val > 255) {
-            mjs_set_errorf(mjs, MJS_INTERNAL_ERROR, "%s: Incorrect value for function SetVoltage", TAG_DAC);
-            mjs_return(mjs, MJS_INTERNAL_ERROR);
-            return;
-        }
-        if (ESP_OK != dac_output_voltage(getDacChannel(mjs), (uint8_t)val )){
-            mjs_set_errorf(mjs, MJS_INTERNAL_ERROR, "%s: Error to set value in function SetVoltage", TAG_DAC);
-            mjs_return(mjs, MJS_INTERNAL_ERROR);
-            return;
-        }
-    } else {
-        mjs_set_errorf(mjs, MJS_INTERNAL_ERROR, "%s: Incorrect call function SetVoltage", TAG_DAC);
-        mjs_return(mjs, MJS_INTERNAL_ERROR);
-        return;
-    }
-    mjs_return(mjs, MJS_UNDEFINED);
-}
-
-//Interface function enable
-static void thingjsDacEnable(struct mjs *mjs) {
-    mjs_return(mjs, mjs_mk_boolean(mjs, dac_output_enable(getDacChannel(mjs)) == ESP_OK));
-}
-
-//Interface function disable
-static void thingjsDacDisable(struct mjs *mjs) {
-    mjs_return(mjs, mjs_mk_boolean(mjs, dac_output_disable(getDacChannel(mjs)) == ESP_OK));
-}
+static fan_state_t fanState = {
+        .dac = 0,
+        .rpm = -1,
+        .tempCurrent = -1,
+        .value = 0,
+        .adcRaw = -1
+};
 
 /* Initialize PCNT functions:
  *  - configure and initialize PCNT
@@ -149,6 +117,53 @@ static esp_err_t pcnt_init(gpio_num_t gpio) {
     return ESP_OK;
 }
 
+static void thingjsFanReconfig(struct mjs *mjs) {
+    mjs_return(mjs, MJS_UNDEFINED);
+}
+static void thingjsFanSetVal(struct mjs *mjs) {
+    //Get function params
+    mjs_val_t arg0 = mjs_arg(mjs, 0);
+    //Param validation
+    if (mjs_is_number(arg0)) {
+        /* Set the DAC voltage */
+        uint32_t val = mjs_get_int32(mjs, arg0);
+        if (val > 255) val = 255;
+        if (ESP_OK != dac_output_voltage(fanConfig.dacChannel, (uint8_t)val )){
+            mjs_set_errorf(mjs, MJS_INTERNAL_ERROR, "%s: Error to set value in function SetVoltage", TAG_FAN);
+            mjs_return(mjs, MJS_INTERNAL_ERROR);
+            return;
+        }
+        fanState.dac = val;
+    } else {
+        mjs_set_errorf(mjs, MJS_INTERNAL_ERROR, "%s: Incorrect call function SetVoltage", TAG_FAN);
+        mjs_return(mjs, MJS_INTERNAL_ERROR);
+        return;
+    }
+    mjs_return(mjs, MJS_UNDEFINED);
+}
+static void thingjsFanGetRpm(struct mjs *mjs) {
+    mjs_return(mjs, mjs_mk_number( mjs, fanState.rpm ));
+}
+static void thingjsFanGetVolt(struct mjs *mjs) {
+    mjs_return(mjs, mjs_mk_number( mjs, fanState.adcRaw ));
+}
+
+//Background demon of FAN controller
+_Noreturn static void thingjsFanDaemon(void *data) {
+    TickType_t xLastWakeTime = xTaskGetTickCount();
+    while(1) {
+        vTaskDelayUntil( &xLastWakeTime, FAN_DEMON_DELAY_MS);
+        int16_t count = 0;
+        pcnt_get_counter_value(PCNT_UNIT, &count);
+        pcnt_counter_clear(PCNT_UNIT);
+        if (count > 0) {
+            fanState.rpm = count * 60;
+        } else fanState.rpm = 0;
+        dac_output_voltage(fanConfig.dacChannel,fanState.dac);
+        fanState.adcRaw = adc1_get_raw(fanConfig.adcChannel);
+    }
+}
+
 mjs_val_t thingjsFanConstructor(struct mjs *mjs, cJSON *params) {
     //Validate preset params
     if (!cJSON_IsArray(params) || !(cJSON_GetArraySize(params) == 3)) {
@@ -157,9 +172,9 @@ mjs_val_t thingjsFanConstructor(struct mjs *mjs, cJSON *params) {
         return MJS_UNDEFINED;
     }
 
-    cJSON * gpioDacj = cJSON_GetArrayItem(params, 0);
-    cJSON * gpioAdcj = cJSON_GetArrayItem(params, 1);
-    cJSON * gpioCntj = cJSON_GetArrayItem(params, 2);
+    cJSON * gpioDacj = cJSON_GetArrayItem(params, 0); // DAC Gpio
+    cJSON * gpioAdcj = cJSON_GetArrayItem(params, 1); // ADC Gpio
+    cJSON * gpioCntj = cJSON_GetArrayItem(params, 2); // TAH/RPM Gpio
 
     if (!cJSON_IsNumber(gpioDacj) || !cJSON_IsNumber(gpioAdcj) || !cJSON_IsNumber(gpioCntj) ) {
         mjs_set_errorf(mjs, MJS_INTERNAL_ERROR, "%s: Incorrect GPIO params", TAG_FAN);
@@ -190,7 +205,7 @@ mjs_val_t thingjsFanConstructor(struct mjs *mjs, cJSON *params) {
             mjs_return(mjs, MJS_INTERNAL_ERROR);
             return MJS_UNDEFINED;
     }
-    if (ESP_OK == dac_output_enable(fanConfig.dacChannel)){
+    if (ESP_OK != dac_output_enable(fanConfig.dacChannel)){
         mjs_set_errorf(mjs, MJS_INTERNAL_ERROR, "%s: Error to enable DAC", TAG_FAN);
         mjs_return(mjs, MJS_INTERNAL_ERROR);
         return MJS_UNDEFINED;
@@ -238,7 +253,7 @@ mjs_val_t thingjsFanConstructor(struct mjs *mjs, cJSON *params) {
 
     adc_power_on();
 
-    if ( ESP_OK != adc_gpio_init( ADC_UNIT, fanConfig.adcGpio ) ){
+    if ( ESP_OK != adc_gpio_init( ADC_UNIT, fanConfig.adcChannel ) ){
         mjs_set_errorf(mjs, MJS_INTERNAL_ERROR, "%s: GPIO ADC init error", TAG_FAN);
         mjs_return(mjs, MJS_INTERNAL_ERROR);
         return MJS_UNDEFINED;
@@ -259,19 +274,31 @@ mjs_val_t thingjsFanConstructor(struct mjs *mjs, cJSON *params) {
     //stdi_setProtectedProperty(mjs, interface, "dacGpio", mjs_mk_number(mjs, gpio));
 
     //Bind functions
-    stdi_setProtectedProperty(mjs, interface, "set",
-            mjs_mk_foreign_func(mjs, (mjs_func_ptr_t) thingjsDacSetVoltage));
-    stdi_setProtectedProperty(mjs, interface, "enable",
-            mjs_mk_foreign_func(mjs, (mjs_func_ptr_t) thingjsDacEnable));
-    stdi_setProtectedProperty(mjs, interface, "disable",
-            mjs_mk_foreign_func(mjs, (mjs_func_ptr_t) thingjsDacDisable));
+    stdi_setProtectedProperty(mjs, interface, "reconfig",
+                              mjs_mk_foreign_func(mjs, (mjs_func_ptr_t) thingjsFanReconfig));
+    stdi_setProtectedProperty(mjs, interface, "setVal",
+                              mjs_mk_foreign_func(mjs, (mjs_func_ptr_t) thingjsFanSetVal));
+    stdi_setProtectedProperty(mjs, interface, "getRpm",
+                              mjs_mk_foreign_func(mjs, (mjs_func_ptr_t) thingjsFanGetRpm));
+    stdi_setProtectedProperty(mjs, interface, "getVolt",
+                              mjs_mk_foreign_func(mjs, (mjs_func_ptr_t) thingjsFanGetVolt));
+
+    xTaskCreatePinnedToCore(
+            &thingjsFanDaemon,
+            "SmartLED",
+            2000,
+            NULL,
+            5,
+            &fan_demon_handle,
+            0
+    );
 
     //Return mJS interface object
     return interface;
 }
 
 void thingjsFanRegister(void) {
-    static int thingjs_Fan_cases[] = DEF_CASES(
+    static int thingjs_fan_cases[] = DEF_CASES(
             DEF_CASE(
                     DEF_ENUM( DEF_CASE(GPIO25), DEF_CASE(GPIO26) ), // DAC GPIO
                     DEF_ENUM( DEF_CASE(GPIO32), DEF_CASE(GPIO33), DEF_CASE(GPIO34), // ADC GPIO
@@ -291,7 +318,7 @@ void thingjsFanRegister(void) {
             .type           = "fan",
             .constructor    = thingjsFanConstructor,
             .destructor     = NULL,
-            .cases          = thingjs_dac_cases
+            .cases          = thingjs_fan_cases
     };
 
     thingjsRegisterInterface(&interface);
