@@ -193,12 +193,12 @@ mjs_val_t thingjsFanConstructor(struct mjs *mjs, cJSON *params) {
        I2S right channel will be mapped to DAC channel 1
     */
     switch ( (gpio_num_t) gpioDacj->valueint ) {
-        case DAC_CHANNEL_1_GPIO_NUM:
-            fanConfig.dacGpio = DAC_CHANNEL_1_GPIO_NUM;
+        case GPIO25:
+            fanConfig.dacGpio = GPIO25;
             fanConfig.dacChannel = DAC_CHANNEL_1;
             break;
-        case DAC_CHANNEL_2_GPIO_NUM:
-            fanConfig.dacGpio = DAC_CHANNEL_2_GPIO_NUM;
+        case GPIO26:
+            fanConfig.dacGpio = GPIO26;
             fanConfig.dacChannel = DAC_CHANNEL_2;
             break;
         default:

@@ -20,8 +20,8 @@ dac_channel_t getDacChannel(struct mjs *mjs) {
     uint32_t gpio = mjs_get_int32(mjs, mjs_get(mjs, this_obj, "dac", ~0));
     //return channel number
     ESP_LOGD(TAG_DAC, "GPIO: %d", gpio);
-    if ( gpio == DAC_CHANNEL_1_GPIO_NUM ) return DAC_CHANNEL_1;
-    else if ( gpio == DAC_CHANNEL_2_GPIO_NUM) return DAC_CHANNEL_2;
+    if ( gpio == GPIO25 ) return DAC_CHANNEL_1;
+    else if ( gpio == GPIO26) return DAC_CHANNEL_2;
     else {
         ESP_LOGE(TAG_DAC, "GPIO: %d", gpio);
         return DAC_CHANNEL_MAX;
@@ -86,8 +86,8 @@ mjs_val_t thingjsDacConstructor(struct mjs *mjs, cJSON *params) {
        I2S left channel will be mapped to DAC channel 2
        I2S right channel will be mapped to DAC channel 1
     */
-    if (gpio == DAC_CHANNEL_1_GPIO_NUM) dac_output_enable(DAC_CHANNEL_1);
-    else if (gpio == DAC_CHANNEL_2_GPIO_NUM) dac_output_enable(DAC_CHANNEL_2);
+    if (gpio == GPIO25) dac_output_enable(DAC_CHANNEL_1);
+    else if (gpio == GPIO26) dac_output_enable(DAC_CHANNEL_2);
 
     //Add protected property to interface
     stdi_setProtectedProperty(mjs, interface, "dac", mjs_mk_number(mjs, gpio));
