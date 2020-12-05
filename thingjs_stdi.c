@@ -17,8 +17,8 @@
 #include "implementation/tgsi_pref.h"
 #include "implementation/tgsi_dac.h"
 #include "implementation/tgsi_adc.h"
-#include "implementation/tgsi_pcnt.h"
-#include "implementation/tgsi_fan.h"
+//#include "implementation/tgsi_pcnt.h"
+//#include "implementation/tgsi_fan.h"
 
 void thingjsSTDIRegister(void) {
     thingjsBitPortRegister();
@@ -33,6 +33,6 @@ void thingjsSTDIRegister(void) {
     thingjsPrefRegister();
     thingjsDacRegister();
     thingjsAdcRegister();
-    thingjsPcntRegister();
-    thingjsFanRegister();
+//    thingjsPcntRegister();
+//    thingjsFanRegister();
 }
