@@ -29,8 +29,8 @@ static const int rtc_i2c_port = I2C_NUM_0;
 #define ACK_VAL                             0x0              /*!< I2C ack value */
 #define NACK_VAL                            0x1              /*!< I2C nack value */
 
-#define DEF_RTC_SDA                         GPIO15
-#define DEF_RTC_SCL                         GPIO4
+#define DEF_RTC_SDA                         GPIO19
+#define DEF_RTC_SCL                         GPIO18
 
 inline uint8_t bcd2dec(uint8_t b) {
     return ((b/16 * 10) + (b % 16));
@@ -97,7 +97,7 @@ esp_err_t rtcGetTime(time_t *ptime) {
 
 esp_err_t rtcSetTime(time_t * loc_time) {
     struct tm *_time;
-    _time = localtime(loc_time);
+    _time = gmtime(loc_time);
 
     uint8_t wrBuf[7] = {0};
 
@@ -128,12 +128,12 @@ esp_err_t time_syncFromRTC(void) {
     return result;
 }
 
-void rtcInit(void) {
+void rtcInit(int sdaGpio, int sclGpio) {
     i2c_config_t conf;
     conf.mode = I2C_MODE_MASTER;
-    conf.sda_io_num = DEF_RTC_SDA;
+    conf.sda_io_num = sdaGpio;
     conf.sda_pullup_en = GPIO_PULLUP_ENABLE;
-    conf.scl_io_num = DEF_RTC_SCL;
+    conf.scl_io_num = sclGpio;
     conf.scl_pullup_en = GPIO_PULLUP_ENABLE;
     conf.master.clk_speed = 100000;
     i2c_param_config(rtc_i2c_port, &conf);
@@ -168,7 +168,7 @@ static void thingjsSetTime(struct mjs *mjs) {
         mjs_set_errorf(mjs, MJS_INTERNAL_ERROR, "%s: Error of params setTime(int/undef)", TAG_DS3231);
         mjs_return(mjs, MJS_INTERNAL_ERROR);
         return;
-    }
+    }   
 
     // Try to set time
     if(rtcSetTime(&now) == ESP_OK) {
@@ -207,6 +207,8 @@ mjs_val_t thingjsDS3231Constructor(struct mjs *mjs, cJSON *params) {
         return MJS_UNDEFINED;
     }
 
+    rtcInit(sda->valueint, scl->valueint);
+
     //Create mjs object
     mjs_val_t interface = mjs_mk_object(mjs);
 
@@ -227,8 +229,6 @@ mjs_val_t thingjsDS3231Constructor(struct mjs *mjs, cJSON *params) {
 }
 
 void thingjsDS3231Register(void) {
-    rtcInit();
-
     static int thingjs_ds3231_cases[] = DEF_CASES(
             //          SDA           SCL
             DEF_CASE(DEF_RTC_SDA, DEF_RTC_SCL)
