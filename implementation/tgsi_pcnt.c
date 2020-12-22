@@ -132,7 +132,7 @@ mjs_val_t thingjsPcntConstructor(struct mjs *mjs, cJSON *params) {
 void thingjsPcntRegister(void) {
     static int thingjs_pcnt_cases[] = DEF_CASES(
             DEF_CASE(
-                    DEF_ENUM(RES_PCNT_0, RES_PCNT_1, RES_PCNT_2, RES_PCNT_3, RES_PCNT_4, RES_PCNT_5, RES_PCNT_6, RES_PCNT_7),
+                    DEF_ENUM(RES_PCNT_0, RES_PCNT_1, RES_PCNT_2, RES_PCNT_3),
                     DEF_ENUM(
                             GPIO2, GPIO4, GPIO5, GPIO13, GPIO14, GPIO15, GPIO16, GPIO17, GPIO18, GPIO19, GPIO21, GPIO22,
                             GPIO23, GPIO25, GPIO26, GPIO27, GPIO32, GPIO33, GPIO34, GPIO35, GPIO36, GPIO39

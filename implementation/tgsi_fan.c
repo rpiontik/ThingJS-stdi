@@ -214,37 +214,37 @@ mjs_val_t thingjsFanConstructor(struct mjs *mjs, cJSON *params) {
 
     // ADC Init
     switch ( (gpio_num_t)gpioAdcj->valueint ) {
-        case ADC1_CHANNEL_0_GPIO_NUM: // 36
+        case GPIO_NUM_36: // 36
             fanConfig.adcChannel = ADC1_CHANNEL_0;
-            fanConfig.adcGpio = ADC1_CHANNEL_0_GPIO_NUM;
+            fanConfig.adcGpio = GPIO_NUM_36;
             break;
-        case ADC1_CHANNEL_1_GPIO_NUM: // 37
+        case GPIO_NUM_37: // 37
             fanConfig.adcChannel = ADC1_CHANNEL_1;
-            fanConfig.adcGpio = ADC1_CHANNEL_1_GPIO_NUM;
+            fanConfig.adcGpio = GPIO_NUM_37;
             break;
-        case ADC1_CHANNEL_2_GPIO_NUM: // 38
+        case GPIO_NUM_38: // 38
             fanConfig.adcChannel = ADC1_CHANNEL_2;
-            fanConfig.adcGpio = ADC1_CHANNEL_2_GPIO_NUM;
+            fanConfig.adcGpio = GPIO_NUM_38;
             break;
-        case ADC1_CHANNEL_3_GPIO_NUM: // 39
+        case GPIO_NUM_39: // 39
             fanConfig.adcChannel = ADC1_CHANNEL_3;
-            fanConfig.adcGpio = ADC1_CHANNEL_3_GPIO_NUM;
+            fanConfig.adcGpio = GPIO_NUM_39;
             break;
-        case ADC1_CHANNEL_4_GPIO_NUM: // 32
+        case GPIO_NUM_32: // 32
             fanConfig.adcChannel = ADC1_CHANNEL_4;
-            fanConfig.adcGpio = ADC1_CHANNEL_4_GPIO_NUM;
+            fanConfig.adcGpio = GPIO_NUM_32;
             break;
-        case ADC1_CHANNEL_5_GPIO_NUM: // 33
+        case GPIO_NUM_33: // 33
             fanConfig.adcChannel = ADC1_CHANNEL_5;
-            fanConfig.adcGpio = ADC1_CHANNEL_5_GPIO_NUM;
+            fanConfig.adcGpio = GPIO_NUM_33;
             break;
-        case ADC1_CHANNEL_6_GPIO_NUM: // 34
+        case GPIO_NUM_34: // 34
             fanConfig.adcChannel = ADC1_CHANNEL_6;
-            fanConfig.adcGpio = ADC1_CHANNEL_6_GPIO_NUM;
+            fanConfig.adcGpio = GPIO_NUM_34;
             break;
-        case ADC1_CHANNEL_7_GPIO_NUM: // 35
+        case GPIO_NUM_35: // 35
             fanConfig.adcChannel = ADC1_CHANNEL_7;
-            fanConfig.adcGpio = ADC1_CHANNEL_7_GPIO_NUM;
+            fanConfig.adcGpio = GPIO_NUM_35;
             break;
         default:
             mjs_set_errorf(mjs, MJS_INTERNAL_ERROR, "%s: GPIO ADC param incorrect", TAG_FAN);
@@ -278,18 +278,6 @@ mjs_val_t thingjsFanConstructor(struct mjs *mjs, cJSON *params) {
             break;
         case RES_PCNT_3:
             u = PCNT_UNIT_3;
-            break;
-        case RES_PCNT_4:
-            u = PCNT_UNIT_4;
-            break;
-        case RES_PCNT_5:
-            u = PCNT_UNIT_5;
-            break;
-        case RES_PCNT_6:
-            u = PCNT_UNIT_6;
-            break;
-        case RES_PCNT_7:
-            u = PCNT_UNIT_7;
             break;
         default:
             mjs_set_errorf(mjs, MJS_INTERNAL_ERROR, "%s: PCNT unit param error", TAG_FAN);
@@ -336,7 +324,7 @@ void thingjsFanRegister(void) {
                     DEF_ENUM( DEF_CASE(GPIO25), DEF_CASE(GPIO26) ), // DAC GPIO
                     DEF_ENUM( DEF_CASE(GPIO32), DEF_CASE(GPIO33), DEF_CASE(GPIO34), // ADC GPIO
                               DEF_CASE(GPIO35), DEF_CASE(GPIO36), DEF_CASE(GPIO39)),
-                    DEF_ENUM(RES_PCNT_0, RES_PCNT_1, RES_PCNT_2, RES_PCNT_3, RES_PCNT_4, RES_PCNT_5, RES_PCNT_6, RES_PCNT_7), // PCNT UNIT
+                    DEF_ENUM(RES_PCNT_0, RES_PCNT_1, RES_PCNT_2, RES_PCNT_3), // PCNT UNIT
                     DEF_ENUM( DEF_CASE(GPIO0),  DEF_CASE(GPIO2), DEF_CASE(GPIO3), DEF_CASE(GPIO4), // PCNT GPIO
                               DEF_CASE(GPIO5),  DEF_CASE(GPIO12), DEF_CASE(GPIO13), DEF_CASE(GPIO14),
                               DEF_CASE(GPIO15), DEF_CASE(GPIO16), DEF_CASE(GPIO17), DEF_CASE(GPIO18),
