@@ -56,24 +56,21 @@ esp_err_t setADC1Resolution ( int resj ) {
 
 adc1_channel_t getAdc1ChannelFromGpio (gpio_num_t gpio) {
     switch (gpio) {
-        case ADC1_CHANNEL_0_GPIO_NUM: // 36
+        case GPIO_NUM_36: // 36
             return ADC1_CHANNEL_0;
-/*        case ADC1_CHANNEL_1_GPIO_NUM: // 37
-            channel = ADC1_CHANNEL_1;
-            break;
-        case ADC1_CHANNEL_2_GPIO_NUM: // 38
-            channel = ADC1_CHANNEL_2;
-            break;
-*/
-        case ADC1_CHANNEL_3_GPIO_NUM: // 39
+        case GPIO_NUM_37: // 37
+            return ADC1_CHANNEL_1;
+        case GPIO_NUM_38: // 38
+            return ADC1_CHANNEL_2;
+        case GPIO_NUM_39: // 39
             return ADC1_CHANNEL_3;
-        case ADC1_CHANNEL_4_GPIO_NUM: // 32
+        case GPIO_NUM_32: // 32
             return ADC1_CHANNEL_4;
-        case ADC1_CHANNEL_5_GPIO_NUM: // 33
+        case GPIO_NUM_33: // 33
             return ADC1_CHANNEL_5;
-        case ADC1_CHANNEL_6_GPIO_NUM: // 34
+        case GPIO_NUM_34: // 34
             return ADC1_CHANNEL_6;
-        case ADC1_CHANNEL_7_GPIO_NUM: // 35
+        case GPIO_NUM_35: // 35
             return ADC1_CHANNEL_7;
         default:
             return ADC1_CHANNEL_MAX;
