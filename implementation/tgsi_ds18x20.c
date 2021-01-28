@@ -52,7 +52,12 @@ static void thingjsDS18X20GetTempC(struct mjs *mjs) {
         owu_struct_t * wire = mjs_get_ptr(mjs, context);
         uint8_t scratch_pad[__SCR_LENGTH];
         ds_read_scratchpad(wire, dev_addr, scratch_pad);
-        result = mjs_mk_number(mjs, ds_get_temp_c(scratch_pad));
+        uint32_t  crc = owu_crc8(scratch_pad,8);
+        if (crc != ((uint32_t)scratch_pad[8])){
+            result = mjs_mk_number(mjs, (float)127);
+            ESP_LOGD(TAG_DS18X20, "Address [%02X:%02X:%02X:%02X:%02X:%02X:%02X:%02X] CRC Error %02X %02X", dev_addr[0], dev_addr[1], dev_addr[2], dev_addr[3],
+                     dev_addr[4], dev_addr[5], dev_addr[6], dev_addr[7], crc, scratch_pad[8]);
+        } else result = mjs_mk_number(mjs, ds_get_temp_c(scratch_pad));
 #endif
     } else {
         mjs_set_errorf(mjs, MJS_INTERNAL_ERROR, "%s/%s: %s %s",

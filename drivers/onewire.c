@@ -25,11 +25,15 @@
  */
 
 #include <string.h>
+#include <esp_log.h>
 #include "onewire.h"
 
 #define CMD_SKIP   (uint8_t) 0xCC
 #define CMD_SEL    (uint8_t) 0x55
 #define CMD_SEARCH (uint8_t) 0xF0
+
+#define  INTERFACE_NAME "OW"
+const char TAG_OW[] = INTERFACE_NAME;
 
 void owu_init(owu_struct_t *wire, ow_driver_ptr driver)
 {
@@ -235,12 +239,13 @@ int owu_search(owu_struct_t *wire, uint8_t *addr)
 			wire->last_device_flag = 0;
 			wire->last_family_discrepancy = 0;
 			search_result = 0;
-			//print_usart(USART1, "Search::result reset\r\n");
+            ESP_LOGD(TAG_OW, "Sensors doesn't found");
 		} else {
 			/*for (int i = 0; i < 8; i++) {
 				addr[i] = wire->rom_no[i];
 			}*/
 			memcpy(addr, wire->rom_no, 8);
+            ESP_LOGD(TAG_OW, "Found sensor: %02X:%02X:%02X:%02X:%02X:%02X:%02X:%02X", addr[0],addr[1],addr[2],addr[3],addr[4],addr[5],addr[6],addr[7]);
 		}
 
 		return search_result;

@@ -29,6 +29,7 @@
 
 //#include "freertos/task.h"
 #include "driver/uart.h"
+#include "soc/uart_reg.h"
 
 #define UB_9600	9600
 #define UB_115200 115200
@@ -80,7 +81,7 @@ int init_driver(ow_driver_ptr *d, int uart, int rx, int tx)
 
 	if (uart_param_config((*d)->uart, &uart_config) != ESP_OK) { return OW_ERR; }
 	if (uart_set_pin((*d)->uart, tx, rx, ECHO_TEST_RTS, ECHO_TEST_CTS) != ESP_OK) { return OW_ERR; }
-	//if (uart_set_line_inverse((*d)->uart, UART_INVERSE_TXD) != ESP_OK) { return OW_ERR; }
+	if (uart_set_line_inverse((*d)->uart, UART_SIGNAL_TXD_INV) != ESP_OK) { return OW_ERR; }
 	if (uart_driver_install((*d)->uart, UART_FIFO_LEN*2, 0, 0, NULL, 0) != ESP_OK) { return OW_ERR; }
 
 	return OW_OK;
@@ -103,6 +104,7 @@ int reset_wire(ow_driver_ptr d)
 	uart_flush(d->uart);
 	// Set 9600 baud for 480 µs reset pulse
 	WRITE_PERI_REG(UART_CLKDIV_REG(d->uart), UCLKDIV_9600);
+	//uart_set_baudrate(d->uart,UCLKDIV_9600);
 	char rst = RESET_BYTE;
 	uart_write_bytes(d->uart, (const char *) &rst, 1);
 
@@ -110,6 +112,7 @@ int reset_wire(ow_driver_ptr d)
 
 	// Restore "normal" operating speed
 	WRITE_PERI_REG(UART_CLKDIV_REG(d->uart), UCLKDIV_115200);
+	//uart_set_baudrate(d->uart,UCLKDIV_115200);
 
 	if (ow_presence != RESET_BYTE) {
 		return OW_OK;
