@@ -133,7 +133,7 @@ static void thingjs_mqtt_event_handler(void *handler_args, esp_event_base_t base
             break;
         case MQTT_EVENT_ERROR:
             callback_data->error.err = esp_tls_get_and_clear_last_error(
-                    event->error_handle, &callback_data->error.mbedtls_err, NULL);
+                    (esp_tls_error_handle_t) event->error_handle, &callback_data->error.mbedtls_err, NULL);
             break;
         default:
             break;

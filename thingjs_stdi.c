@@ -16,7 +16,7 @@
 #include "implementation/tgsi_sys_info.h"
 #include "implementation/tgsi_pref.h"
 #include "implementation/tgsi_string.h"
-// #include "implementation/tgsi_dac.h"
+ #include "implementation/tgsi_dac.h"
 // #include "implementation/tgsi_adc.h"
 // #include "implementation/tgsi_pcnt.h"
 #include "implementation/tgsi_fan.h"
@@ -36,5 +36,5 @@ void thingjsSTDIRegister(void) {
     // thingjsDacRegister();
     // thingjsAdcRegister();
     // thingjsPcntRegister();
-    thingjsFanRegister();
+    // thingjsFanRegister();
 }
