@@ -539,7 +539,7 @@ static mjs_err_t thingjsHTTPAppendChunk(struct st_http_context *context, const c
 
 static void thingjsHTTPAppendURLEncodeStr(struct mbuf *mb, const char *str, size_t size) {
     const struct mg_str safe = mg_mk_str("._-$,;~()/");
-    char hex_buf[3];
+    char hex_buf[4];
     for (size_t i = 0; i < size; i++) {
         const unsigned char c = *((const unsigned char *) str + i);
         if (isalnum(c) || mg_strchr(safe, c) != NULL) {
@@ -547,7 +547,7 @@ static void thingjsHTTPAppendURLEncodeStr(struct mbuf *mb, const char *str, size
         } else if (c == ' ') {
             mbuf_append(mb, "+", 1);
         } else {
-            snprintf(hex_buf, 3, "%%%02x", c);
+            snprintf(hex_buf, 4, "%%%02x", c);
             mbuf_append(mb, hex_buf, 3);
         }
     }
