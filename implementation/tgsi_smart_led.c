@@ -367,6 +367,7 @@ mjs_val_t thingjsSmartLEDConstructor(struct mjs *mjs, cJSON *params) {
         stdi_setProtectedProperty(mjs, channel, DEF_STR_DRIVER, interface);
         stdi_setProtectedProperty(mjs, channel, DEF_STR_CHANNEL, mjs_mk_number(mjs,  i - 1));
         stdi_setProtectedProperty(mjs, channel, DEF_STR_GPIO, mjs_mk_number(mjs,  json_gpio->valueint));
+
         stdi_setProtectedProperty(mjs, channel, DEF_STR_DUTY, mjs_mk_number(mjs, 0));
         stdi_setProtectedProperty(mjs, channel, DEF_STR_INVERSE, mjs_mk_boolean(mjs, 1));
         //Bind functions
