@@ -4,7 +4,6 @@
 
 #include "tgsi_timer.h"
 
-
 #include "freertos/FreeRTOSConfig.h"
 #include "freertos/FreeRTOS.h"
 #include <freertos/timers.h>
