@@ -145,7 +145,7 @@ mjs_val_t thingjsAdcConstructor(struct mjs *mjs, cJSON *params) {
        Note:
        The ADC driver API supports ADC1 (8 channels, attached to GPIOs 32 - 39)
     */
-    adc_power_on();
+    adc_power_acquire();
     if ( ESP_OK != adc_gpio_init( ADC_UNIT_1, channel ) ) {
         mjs_set_errorf(mjs, MJS_INTERNAL_ERROR, "%s: Incorrect GPIO param", TAG_ADC);
         mjs_return(mjs, MJS_INTERNAL_ERROR);
